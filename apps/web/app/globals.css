@@ -1,0 +1,316 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Modern Tech Terminal Theme - Refined colors */
+    /* Background: Very dark black #0A0A0A - darker than cards for contrast */
+    --background: 0 0% 4%;
+    /* Foreground: Pure white for values */
+    --foreground: 0 0% 100%;
+    /* Card: Dark gray background with subtle gradient potential #1A1A1A */
+    --card: 0 0% 10%;
+    /* Card foreground: White text */
+    --card-foreground: 0 0% 100%;
+    /* Popover: Same as card */
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 100%;
+    /* Primary: Orange for action buttons #E67E22 - enhanced with better contrast */
+    --primary: 23 82% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 23 82% 60%;
+    /* Secondary: Dark blue buttons #3A506B - refined */
+    --secondary: 214 35% 38%;
+    --secondary-foreground: 0 0% 100%;
+    /* Muted: Light gray for labels #AAAAAA - improved contrast */
+    --muted: 0 0% 70%;
+    --muted-foreground: 0 0% 70%;
+    /* Accent: Lighter dark gray for hover states #2C2C2C */
+    --accent: 0 0% 18%;
+    --accent-foreground: 0 0% 100%;
+    /* Destructive: Refined red for errors/warnings */
+    --destructive: 0 85% 65%;
+    --destructive-foreground: 0 0% 100%;
+    /* Border: Dark gray separators with subtle glow potential #333333 */
+    --border: 0 0% 22%;
+    /* Input: Same as border */
+    --input: 0 0% 20%;
+    /* Ring: Orange focus ring with glow #FF9900 */
+    --ring: 23 100% 55%;
+    /* Status colors - improved visibility */
+    --status-success: 142 76% 50%;
+    --status-warning: 36 100% 55%;
+    --status-error: 0 85% 65%;
+    --radius: 0;
+    /* Animation durations */
+    --duration-fast: 150ms;
+    --duration-normal: 200ms;
+    --duration-slow: 300ms;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+  
+  /* Typography hierarchy - professional sans-serif */
+  h1 {
+    @apply text-3xl font-bold leading-tight tracking-tight;
+  }
+  
+  h2 {
+    @apply text-2xl font-semibold leading-tight tracking-tight;
+  }
+  
+  h3 {
+    @apply text-xl font-semibold leading-snug;
+  }
+  
+  h4 {
+    @apply text-lg font-semibold leading-snug;
+  }
+  
+  h5, h6 {
+    @apply text-base font-semibold;
+  }
+  
+  /* Labels - small text without forced uppercase */
+  label, .label {
+    @apply text-muted-foreground text-sm font-medium leading-5;
+  }
+  
+  /* Values - bold white for emphasis */
+  .value {
+    @apply text-foreground font-semibold;
+  }
+  
+  /* Null/inactive states */
+  .null-value {
+    @apply text-destructive/80;
+  }
+  
+  /* Small badge text - can use uppercase sparingly */
+  .badge-text {
+    @apply text-[10px] font-medium uppercase tracking-wider text-muted-foreground;
+  }
+  
+  /* Code/monospace - use sparingly for specific data */
+  code, .mono {
+    @apply font-mono text-sm;
+  }
+  
+  /* Smooth transitions for interactive elements */
+  button, a, [role="button"] {
+    @apply transition-all duration-200;
+  }
+  
+  /* Hide scrollbar for workspace tabs */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Subtle scrollbar styling */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
+  /* Webkit scrollbar styling (Chrome, Safari, Edge) */
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+    transition: background 0.2s;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Grid background animation */
+  @keyframes scan {
+    0% {
+      transform: translateY(-100%);
+    }
+    100% {
+      transform: translateY(100vh);
+    }
+  }
+
+  .scan-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to bottom, transparent 0%, rgba(230, 126, 34, 0.15) 50%, transparent 100%);
+    box-shadow: 0 0 8px rgba(230, 126, 34, 0.3);
+    animation: scan 8s linear infinite;
+    pointer-events: none;
+  }
+  
+  /* Touch manipulation for better mobile performance */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  /* Mobile-specific optimizations */
+  @media (max-width: 768px) {
+    /* Reduce padding on mobile */
+    .mobile-container {
+      padding: 0.5rem;
+    }
+    
+    /* Smaller text on mobile */
+    .mobile-text {
+      font-size: 0.75rem;
+    }
+    
+    /* Touch-friendly buttons */
+    button, a[role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    /* Optimize grid layout for mobile */
+    .react-grid-layout {
+      margin: 4px;
+    }
+    
+    .react-grid-item {
+      border-radius: 4px;
+    }
+  }
+  
+  /* Tablet-specific optimizations */
+  @media (min-width: 768px) and (max-width: 1024px) {
+    .tablet-container {
+      padding: 1rem;
+    }
+  }
+  
+  /* Subtle glow effects for terminal aesthetic */
+  .glow-subtle {
+    box-shadow: 0 0 8px rgba(255, 153, 0, 0.1);
+  }
+  
+  .glow-primary {
+    box-shadow: 0 0 12px rgba(230, 126, 34, 0.2);
+  }
+  
+  /* Card elevation shadows */
+  .shadow-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+  
+  .shadow-card-hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Resize handles for react-grid-layout - only corners, grey */
+  .react-grid-item > .react-resizable-handle {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background: #888888;
+    border: 2px solid #888888;
+    opacity: 0.6;
+    transition: opacity 0.2s, background 0.2s, border-color 0.2s;
+    z-index: 1000;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .react-grid-item:hover > .react-resizable-handle {
+    opacity: 0.8;
+    background: #aaaaaa;
+    border-color: #aaaaaa;
+  }
+
+  .react-grid-item > .react-resizable-handle:hover {
+    opacity: 1;
+    background: #cccccc;
+    border-color: #cccccc;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+  }
+
+  /* Hide side handles - only show corners */
+  .react-grid-item > .react-resizable-handle.react-resizable-handle-n,
+  .react-grid-item > .react-resizable-handle.react-resizable-handle-e,
+  .react-grid-item > .react-resizable-handle.react-resizable-handle-s,
+  .react-grid-item > .react-resizable-handle.react-resizable-handle-w {
+    display: none;
+  }
+
+  /* Corner handles */
+  .react-grid-item > .react-resizable-handle.react-resizable-handle-ne {
+    top: -8px;
+    right: -8px;
+    cursor: nesw-resize;
+  }
+
+  .react-grid-item > .react-resizable-handle.react-resizable-handle-nw {
+    top: -8px;
+    left: -8px;
+    cursor: nwse-resize;
+  }
+
+  .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+    bottom: -8px;
+    right: -8px;
+    cursor: nwse-resize;
+  }
+
+  .react-grid-item > .react-resizable-handle.react-resizable-handle-sw {
+    bottom: -8px;
+    left: -8px;
+    cursor: nesw-resize;
+  }
+
+  /* More visible resize handles with inner dot */
+  .react-grid-item > .react-resizable-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    background: #1a1a1a;
+    opacity: 0.9;
+  }
+}
+
+/* Override drag background - change from red to grey (outside @layer for higher specificity) */
+.react-grid-item.react-draggable-dragging {
+  background: rgba(128, 128, 128, 0.5) !important;
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: rgba(128, 128, 128, 0.4) !important;
+  opacity: 0.4 !important;
+  border: 2px dashed rgba(128, 128, 128, 0.7) !important;
+}
+

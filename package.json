@@ -1,0 +1,21 @@
+{
+  "name": "alithos-terminal",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "cd apps/web && PORT=3000 npm run dev",
+    "build": "cd apps/web && npm run build",
+    "lint": "cd apps/web && npm run lint",
+    "type-check": "cd apps/web && npm run type-check"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0"
+  }
+}
+

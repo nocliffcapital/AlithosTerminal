@@ -1,0 +1,19 @@
+{
+  "name": "@alithos-terminal/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.4"
+  },
+  "dependencies": {
+    "zod": "^3.22.4"
+  }
+}
+
