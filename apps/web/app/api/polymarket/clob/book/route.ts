@@ -8,10 +8,10 @@ const CLOB_API_BASE = process.env.NEXT_PUBLIC_POLYMARKET_CLOB_API_URL || 'https:
  * Supports L1 authentication headers passed from the client
  */
 export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const tokenId = searchParams.get('token_id');
+  
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const tokenId = searchParams.get('token_id');
-    
     if (!tokenId) {
       return NextResponse.json(
         { error: 'token_id parameter is required' },
