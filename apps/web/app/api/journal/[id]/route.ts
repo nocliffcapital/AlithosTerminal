@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 const updateJournalEntrySchema = z.object({
@@ -89,10 +90,10 @@ export async function PUT(
       updateData.note = validatedData.note;
     }
     if (validatedData.attachments !== undefined) {
-      updateData.attachments = validatedData.attachments || null;
+      updateData.attachments = validatedData.attachments ?? Prisma.JsonNull;
     }
     if (validatedData.postMortem !== undefined) {
-      updateData.postMortem = validatedData.postMortem || null;
+      updateData.postMortem = validatedData.postMortem ?? Prisma.JsonNull;
     }
 
     const entry = await prisma.journalEntry.update({

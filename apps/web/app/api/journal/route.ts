@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 const createJournalEntrySchema = z.object({
@@ -100,7 +101,9 @@ export async function POST(request: NextRequest) {
         marketId: validatedData.marketId || null,
         timestamp: new Date(validatedData.timestamp),
         note: validatedData.note,
-        attachments: validatedData.attachments || null,
+        ...(validatedData.attachments !== undefined && {
+          attachments: validatedData.attachments ?? Prisma.JsonNull,
+        }),
       },
     });
 
