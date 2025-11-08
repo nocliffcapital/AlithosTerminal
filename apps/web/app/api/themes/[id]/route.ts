@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 const updateThemeSchema = z.object({
@@ -79,9 +80,26 @@ export async function PUT(
       return NextResponse.json({ error: 'Theme not found' }, { status: 404 });
     }
 
+    // Prepare update data with proper JSON type casting
+    const updateData: {
+      name?: string;
+      config?: Prisma.InputJsonValue;
+      isPublic?: boolean;
+    } = {};
+
+    if (validatedData.name !== undefined) {
+      updateData.name = validatedData.name;
+    }
+    if (validatedData.config !== undefined) {
+      updateData.config = validatedData.config as Prisma.InputJsonValue;
+    }
+    if (validatedData.isPublic !== undefined) {
+      updateData.isPublic = validatedData.isPublic;
+    }
+
     const theme = await prisma.theme.update({
       where: { id: themeId },
-      data: validatedData,
+      data: updateData,
     });
 
     return NextResponse.json({ theme });
