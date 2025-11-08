@@ -35,7 +35,7 @@ async function handler(
       );
     }
 
-    const result = research.result as MarketResearchResult;
+    const result = research.result as unknown as MarketResearchResult;
     
     // Include intermediate results if available
     if (research.intermediateResults) {
