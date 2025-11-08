@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { polymarketClient } from '@/lib/api/polymarket';
-import { getClobAuthHeaders } from '@/lib/api/clob-auth';
-import { usePrivy } from '@privy-io/react-auth';
 
 /**
  * GET /api/orders
