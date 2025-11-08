@@ -232,7 +232,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           const savedLayout = savedLayouts.find((l: any) => l.isDefault) || savedLayouts[0];
           
           if (savedLayout && savedLayout.config) {
-            const layoutConfig = savedLayout.config as WorkspaceLayout;
+            const layoutConfig = savedLayout.config as unknown as WorkspaceLayout;
             const loadedLayout: WorkspaceLayout = {
               id: savedLayout.id,
               name: savedLayout.name || 'Default Layout',

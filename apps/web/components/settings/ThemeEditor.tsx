@@ -77,9 +77,9 @@ export function ThemeEditor() {
 
   const handleLoadTheme = (theme: Theme) => {
     setSelectedTheme(theme);
-    setEditingConfig(theme.config as ThemeConfig);
+    setEditingConfig(theme.config as unknown as ThemeConfig);
     setThemeName(theme.name);
-    setTheme(theme.config as ThemeConfig);
+    setTheme(theme.config as unknown as ThemeConfig);
   };
 
   const handleApplyTheme = () => {
