@@ -157,8 +157,6 @@ function OrderCreatorCardComponent() {
     };
   };
 
-  const [showLimitSettings, setShowLimitSettings] = useState(false);
-  
   const impact = calculateImpact();
 
   return (
