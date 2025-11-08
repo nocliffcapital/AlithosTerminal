@@ -71,7 +71,7 @@ async function handler(request: NextRequest) {
         
         if (cacheAgeHours < 24) {
           console.log(`[Market Research] Returning cached result (${cacheAgeHours.toFixed(1)} hours old)`);
-          const cachedResult = cachedResearch.result as MarketResearchResult;
+          const cachedResult = cachedResearch.result as unknown as MarketResearchResult;
           
           // Add intermediate results if requested and available
           if (includeIntermediate && cachedResearch.intermediateResults) {
