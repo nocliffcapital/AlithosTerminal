@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { Address } from 'viem';
 import { USDC_ADDRESS } from '@/lib/web3/polymarket-contracts';
-import { erc20ABI } from '@/lib/web3/polymarket-contracts';
 import { onChainService } from '@/lib/api/onchain';
 
 /**
