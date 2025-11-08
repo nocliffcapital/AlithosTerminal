@@ -9,12 +9,6 @@ const createThemeSchema = z.object({
   isPublic: z.boolean().default(false),
 });
 
-const updateThemeSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
-  config: z.record(z.unknown()).optional(),
-  isPublic: z.boolean().optional(),
-});
-
 /**
  * GET /api/themes
  * Fetch user's themes

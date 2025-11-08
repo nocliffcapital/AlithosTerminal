@@ -11,14 +11,6 @@ const createJournalEntrySchema = z.object({
   attachments: z.record(z.unknown()).optional(),
 });
 
-const updateJournalEntrySchema = z.object({
-  marketId: z.string().optional(),
-  timestamp: z.string().datetime().optional(),
-  note: z.string().min(1).max(10000).optional(),
-  attachments: z.record(z.unknown()).optional(),
-  postMortem: z.record(z.unknown()).optional(),
-});
-
 /**
  * GET /api/journal
  * Fetch user's journal entries

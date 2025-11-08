@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { createPublicClient, http, Address } from 'viem';
+import { createPublicClient, http } from 'viem';
 import { polygon } from 'viem/chains';
-import { onChainService } from '@/lib/api/onchain';
 
 /**
  * GET /api/positions/history

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
-import { polymarketClient } from '@/lib/api/polymarket';
 
 /**
  * GET /api/orders

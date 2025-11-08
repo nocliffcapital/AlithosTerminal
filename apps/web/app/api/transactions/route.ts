@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { getPositionsQuerySchema } from '@/lib/validators/positions';
-import { createPublicClient, http, Address } from 'viem';
-import { polygon } from 'viem/chains';
+import { Address } from 'viem';
 import { USDC_ADDRESS } from '@/lib/web3/polymarket-contracts';
 import { erc20ABI } from '@/lib/web3/polymarket-contracts';
 import { onChainService } from '@/lib/api/onchain';
-import { polymarketClient } from '@/lib/api/polymarket';
 
 /**
  * GET /api/transactions

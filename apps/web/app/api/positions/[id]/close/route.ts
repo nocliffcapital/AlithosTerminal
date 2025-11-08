@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
-import { useTrading } from '@/lib/hooks/useTrading';
 
 /**
  * POST /api/positions/[id]/close
