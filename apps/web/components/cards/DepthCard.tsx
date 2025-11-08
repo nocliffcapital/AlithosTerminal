@@ -50,6 +50,18 @@ function DepthCardComponent() {
     authParams?.walletClient
   );
 
+  // Calculate liquidity metrics (before early returns to avoid conditional hooks)
+  const metrics = useMemo(() => {
+    if (!orderBook) return { midPrice: 0, spread: 0, totalLiquidity: 0 };
+    return calculateLiquidityMetrics(orderBook.bids, orderBook.asks);
+  }, [orderBook?.bids, orderBook?.asks]);
+
+  // Calculate price impact for common trade sizes
+  const impactSizes = useMemo(() => {
+    if (!orderBook || metrics.midPrice <= 0) return { buy: [], sell: [] };
+    return calculateCommonImpactSizes(orderBook.bids, orderBook.asks, metrics.midPrice);
+  }, [orderBook?.bids, orderBook?.asks, metrics.midPrice]);
+
   if (!selectedMarketId) {
     return (
       <>
@@ -125,18 +137,6 @@ function DepthCardComponent() {
       </div>
     );
   }
-
-  // Calculate liquidity metrics (before early returns to avoid conditional hooks)
-  const metrics = useMemo(() => {
-    if (!orderBook) return { midPrice: 0, spread: 0, totalLiquidity: 0 };
-    return calculateLiquidityMetrics(orderBook.bids, orderBook.asks);
-  }, [orderBook?.bids, orderBook?.asks]);
-
-  // Calculate price impact for common trade sizes
-  const impactSizes = useMemo(() => {
-    if (!orderBook || metrics.midPrice <= 0) return { buy: [], sell: [] };
-    return calculateCommonImpactSizes(orderBook.bids, orderBook.asks, metrics.midPrice);
-  }, [orderBook?.bids, orderBook?.asks, metrics.midPrice]);
 
   if (!orderBook) {
     return (

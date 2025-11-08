@@ -29,6 +29,7 @@ function OrderCreatorCardComponent() {
   const [size, setSize] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [showLimitSettings, setShowLimitSettings] = useState(false);
 
   // Hooks must be called unconditionally - before any early returns
   const { buy, sell } = useTrading();
