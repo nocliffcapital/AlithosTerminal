@@ -2,15 +2,18 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { useMarketStore } from '@/stores/market-store';
-import { useMarkets } from '@/lib/hooks/usePolymarketData';
+import { useMarkets, useHistoricalPrices } from '@/lib/hooks/usePolymarketData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Check, ChevronDown } from 'lucide-react';
+import { Search, Check, ChevronDown, Calendar } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface CorrelationPair {
   market1: string;
@@ -18,45 +21,176 @@ interface CorrelationPair {
   correlation: number;
 }
 
+type TimeRange = '1D' | '7D' | '30D' | 'ALL';
+
 function CorrelationMatrixCardComponent() {
   const { markets, getPrice } = useMarketStore();
   const { data: allMarkets } = useMarkets({ active: true }); // Fetch all markets (no limit)
   const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
   const [correlations, setCorrelations] = useState<CorrelationPair[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [timeRange, setTimeRange] = useState<TimeRange>('7D');
+  const [isCalculating, setIsCalculating] = useState(false);
 
-  // Calculate correlation between two markets based on price movements
-  const calculateCorrelation = (marketId1: string, marketId2: string): number => {
-    // Simplified correlation calculation based on current probabilities
-    // In production, would use historical price data
-    const price1 = getPrice(marketId1);
-    const price2 = getPrice(marketId2);
-
-    if (!price1 || !price2) return 0;
-
-    const prob1 = price1.probability;
-    const prob2 = price2.probability;
-
-    // Simple correlation: how close probabilities are
-    // Higher correlation if probabilities are similar or move together
-    const diff = Math.abs(prob1 - prob2);
-    const correlation = 1 - diff / 100; // Normalize to 0-1, then scale
-
-    return correlation;
+  // Get hours for time range
+  const getHoursForRange = (range: TimeRange): number | null => {
+    switch (range) {
+      case '1D': return 24;
+      case '7D': return 24 * 7;
+      case '30D': return 24 * 30;
+      case 'ALL': return null;
+      default: return 24 * 7;
+    }
   };
 
-  const computeCorrelations = () => {
-    if (selectedMarkets.length < 2) {
-      setCorrelations([]);
-      return;
+  // Calculate Pearson correlation coefficient between two price series
+  const calculatePearsonCorrelation = (prices1: number[], prices2: number[]): number => {
+    if (prices1.length !== prices2.length || prices1.length < 2) return 0;
+
+    const n = prices1.length;
+    
+    // Calculate means
+    const mean1 = prices1.reduce((sum, p) => sum + p, 0) / n;
+    const mean2 = prices2.reduce((sum, p) => sum + p, 0) / n;
+
+    // Calculate numerator (covariance)
+    let numerator = 0;
+    for (let i = 0; i < n; i++) {
+      numerator += (prices1[i] - mean1) * (prices2[i] - mean2);
     }
 
+    // Calculate denominators (standard deviations)
+    let sumSqDiff1 = 0;
+    let sumSqDiff2 = 0;
+    for (let i = 0; i < n; i++) {
+      sumSqDiff1 += Math.pow(prices1[i] - mean1, 2);
+      sumSqDiff2 += Math.pow(prices2[i] - mean2, 2);
+    }
+
+    const denominator = Math.sqrt(sumSqDiff1 * sumSqDiff2);
+    
+    if (denominator === 0) return 0;
+    
+    // Pearson correlation coefficient
+    const correlation = numerator / denominator;
+    
+    // Clamp to [-1, 1] range
+    return Math.max(-1, Math.min(1, correlation));
+  };
+
+  // Fetch historical prices for each selected market
+  // We'll fetch them individually and combine the results
+  const hoursForRange = getHoursForRange(timeRange);
+  
+  // Create a component to fetch historical data for a single market
+  const HistoricalDataFetcher = ({ marketId, onData, onLoading }: { marketId: string; onData: (data: any[]) => void; onLoading: (loading: boolean) => void }) => {
+    const { data, isLoading } = useHistoricalPrices(marketId, hoursForRange);
+    useEffect(() => {
+      onData(data || []);
+    }, [data, onData]);
+    useEffect(() => {
+      onLoading(isLoading);
+    }, [isLoading, onLoading]);
+    return null;
+  };
+
+  // Store historical data in state
+  const [historicalDataMap, setHistoricalDataMap] = useState<Map<string, any[]>>(new Map());
+  const [loadingMap, setLoadingMap] = useState<Map<string, boolean>>(new Map());
+
+  // Update historical data map when markets change
+  useEffect(() => {
+    const newMap = new Map<string, any[]>();
+    const newLoadingMap = new Map<string, boolean>();
+    selectedMarkets.forEach((marketId) => {
+      newMap.set(marketId, []);
+      newLoadingMap.set(marketId, true);
+    });
+    setHistoricalDataMap(newMap);
+    setLoadingMap(newLoadingMap);
+  }, [selectedMarkets, timeRange]);
+
+  // Handler to update historical data map
+  const handleHistoricalData = useCallback((marketId: string, data: any[]) => {
+    setHistoricalDataMap((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(marketId, data);
+      return newMap;
+    });
+  }, []);
+
+  // Handler to update loading state
+  const handleLoadingState = useCallback((marketId: string, loading: boolean) => {
+    setLoadingMap((prev) => {
+      const newMap = new Map(prev);
+      newMap.set(marketId, loading);
+      return newMap;
+    });
+  }, []);
+
+  // Check if any historical data is loading
+  const isLoadingHistorical = Array.from(loadingMap.values()).some((loading) => loading);
+
+  // Align price series by timestamp and calculate correlations
+  const computeCorrelations = useMemo(() => {
+    if (selectedMarkets.length < 2) {
+      return [];
+    }
+
+    // Get historical data for all markets from the map
+    const historicalData = selectedMarkets.map((marketId) => {
+      return {
+        marketId,
+        data: historicalDataMap.get(marketId) || [],
+      };
+    });
+
+    // Check if we have enough data
+    const hasData = historicalData.every((h) => h.data.length > 0);
+    if (!hasData) {
+      return [];
+    }
+
+    // Align price series by timestamp (find common timestamps)
+    const allTimestamps = new Set<number>();
+    historicalData.forEach((h) => {
+      h.data.forEach((point: any) => {
+        allTimestamps.add(point.timestamp);
+      });
+    });
+
+    // Sort timestamps
+    const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
+
+    // Create aligned price arrays for each market
+    const alignedPrices = historicalData.map((h) => {
+      const priceMap = new Map<number, number>();
+      h.data.forEach((point: any) => {
+        priceMap.set(point.timestamp, point.price || point.probability / 100);
+      });
+
+      // Interpolate missing values (use nearest neighbor)
+      return sortedTimestamps.map((ts) => {
+        if (priceMap.has(ts)) {
+          return priceMap.get(ts)!;
+        }
+        // Find nearest timestamp
+        const nearest = h.data.reduce((closest, point: any) => {
+          const pointTs = point.timestamp;
+          const closestTs = closest ? closest.timestamp : pointTs;
+          return Math.abs(pointTs - ts) < Math.abs(closestTs - ts) ? point : closest;
+        }, null as any);
+        return nearest ? (nearest.price || nearest.probability / 100) : 0.5;
+      });
+    });
+
+    // Calculate correlations for all pairs
     const pairs: CorrelationPair[] = [];
     for (let i = 0; i < selectedMarkets.length; i++) {
       for (let j = i + 1; j < selectedMarkets.length; j++) {
-        const correlation = calculateCorrelation(
-          selectedMarkets[i],
-          selectedMarkets[j]
+        const correlation = calculatePearsonCorrelation(
+          alignedPrices[i],
+          alignedPrices[j]
         );
         pairs.push({
           market1: selectedMarkets[i],
@@ -66,16 +200,21 @@ function CorrelationMatrixCardComponent() {
       }
     }
 
-    // Sort by correlation
-    pairs.sort((a, b) => b.correlation - a.correlation);
-    setCorrelations(pairs);
-  };
+    // Sort by absolute correlation descending (strongest first)
+    pairs.sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
+    return pairs;
+  }, [selectedMarkets, historicalDataMap, timeRange]);
 
   useEffect(() => {
     if (selectedMarkets.length >= 2) {
-      computeCorrelations();
+      setIsCalculating(isLoadingHistorical);
+      if (!isLoadingHistorical) {
+        setCorrelations(computeCorrelations);
+      }
+    } else {
+      setCorrelations([]);
     }
-  }, [selectedMarkets, markets]);
+  }, [selectedMarkets, computeCorrelations, isLoadingHistorical]);
 
   // Filter markets by search query
   const filteredMarkets = useMemo(() => {
@@ -101,7 +240,46 @@ function CorrelationMatrixCardComponent() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+      {/* Render historical data fetchers */}
+      {selectedMarkets.map((marketId) => (
+        <HistoricalDataFetcher
+          key={`${marketId}-${timeRange}`}
+          marketId={marketId}
+          onData={(data) => handleHistoricalData(marketId, data)}
+          onLoading={(loading) => handleLoadingState(marketId, loading)}
+        />
+      ))}
+      
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {/* Time Range Selector */}
+        {selectedMarkets.length >= 2 && (
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-3 w-3 text-muted-foreground" />
+              <span className="text-xs font-semibold">Time Range</span>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="text-xs h-7 px-2">
+                  {timeRange}
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-24">
+                {(['1D', '7D', '30D', 'ALL'] as TimeRange[]).map((range) => (
+                  <DropdownMenuItem
+                    key={range}
+                    onClick={() => setTimeRange(range)}
+                    className={timeRange === range ? 'bg-accent' : ''}
+                  >
+                    <span className="text-xs">{range}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+
         {/* Market Selection Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -188,20 +366,25 @@ function CorrelationMatrixCardComponent() {
 
         {/* Correlation Pairs */}
         {selectedMarkets.length < 2 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="text-muted-foreground text-xs mb-1">
-              Select at least 2 markets
-            </div>
-            <div className="text-[10px] text-muted-foreground/70">
-              {selectedMarkets.length === 0 
-                ? 'Choose markets to analyze correlations' 
-                : 'Select one more market to see correlations'}
-            </div>
+          <EmptyState
+            icon={Search}
+            title="Select at least 2 markets"
+            description={selectedMarkets.length === 0 
+              ? 'Choose markets to analyze correlations' 
+              : 'Select one more market to see correlations'}
+            className="p-4"
+          />
+        ) : isLoadingHistorical || isCalculating ? (
+          <div className="flex items-center justify-center h-full">
+            <LoadingSpinner size="sm" text="Loading historical data..." />
           </div>
         ) : correlations.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
-            Calculating correlations...
-          </div>
+          <EmptyState
+            icon={Search}
+            title="No correlation data"
+            description="Unable to calculate correlations. Historical data may be insufficient."
+            className="p-4"
+          />
         ) : (
           <div className="space-y-1.5">
             <div className="text-[10px] font-medium text-muted-foreground mb-1">
@@ -229,7 +412,7 @@ function CorrelationMatrixCardComponent() {
                       isModerate ? 'text-yellow-400' : 
                       'text-red-400'
                     }`}>
-                      {correlationPercent}%
+                      {pair.correlation >= 0 ? '+' : ''}{correlationPercent}%
                     </span>
                     <span className={`text-[10px] ${
                       isStrong ? 'text-green-400' : 
@@ -238,6 +421,17 @@ function CorrelationMatrixCardComponent() {
                     }`}>
                       {isStrong ? 'Strong' : isModerate ? 'Moderate' : 'Weak'}
                     </span>
+                  </div>
+                  {/* Correlation strength indicator */}
+                  <div className="w-full bg-background h-1.5 mb-2 rounded-full overflow-hidden">
+                    <div
+                      className={`h-1.5 ${
+                        isStrong ? 'bg-green-400' : 
+                        isModerate ? 'bg-yellow-400' : 
+                        'bg-red-400'
+                      }`}
+                      style={{ width: `${Math.abs(pair.correlation) * 100}%` }}
+                    />
                   </div>
                   <div className="space-y-1 mb-2">
                     <div className="text-[10px] leading-relaxed truncate">

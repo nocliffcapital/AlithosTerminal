@@ -78,8 +78,8 @@ export function useTransactions(params?: TransactionHistoryParams) {
       };
     },
     enabled: !!walletAddress,
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 60000, // Refetch every minute
+    staleTime: 5 * 60 * 1000, // 5 minutes - transactions are on-chain and don't change once confirmed
+    refetchInterval: 5 * 60 * 1000, // 5 minutes - new transactions appear when trades occur, polling is fallback only
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)
   });
 }

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOrderBook } from '@/lib/hooks/usePolymarketData';
-import { useMarketStore } from '@/stores/market-store';
 import { useClobAuth } from '@/lib/hooks/useClobAuth';
 import { usePrivy } from '@privy-io/react-auth';
 import { Loader2, Shield, AlertCircle, Search } from 'lucide-react';
@@ -11,6 +10,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Address } from 'viem';
 import { MarketSelector } from '@/components/MarketSelector';
+import { cn } from '@/lib/utils';
 
 interface OrderBookRow {
   price: number;
@@ -18,8 +18,14 @@ interface OrderBookRow {
   dollars: number;
 }
 
-function OrderBookCardComponent() {
-  const { selectedMarketId } = useMarketStore();
+interface OrderBookCardProps {
+  marketId?: string;
+  onMarketChange?: (marketId: string | null) => void;
+}
+
+function OrderBookCardComponent({ marketId: propMarketId, onMarketChange }: OrderBookCardProps = {}) {
+  // Use prop marketId only - don't fall back to global state to avoid shared state issues
+  const effectiveMarketId = propMarketId;
   const { user, authenticated } = usePrivy();
   const { getAuthParams, requestAuth, isSigning, hasAuth, error: authError, isReady } = useClobAuth();
   
@@ -59,7 +65,7 @@ function OrderBookCardComponent() {
   }, [authenticated, hasAuth, authParams, isSigning, getAuthParams]);
 
   const { data: orderBook, isLoading, error, refetch } = useOrderBook(
-    selectedMarketId, 
+    effectiveMarketId || null, 
     selectedOutcome,
     !!authParams, // useL1Auth
     authParams?.address,
@@ -150,25 +156,30 @@ function OrderBookCardComponent() {
     })}`;
   }, []);
 
-  if (!selectedMarketId) {
+  const handleMarketSelect = useCallback((marketId: string | null) => {
+    if (onMarketChange) {
+      onMarketChange(marketId);
+    }
+    setShowMarketSelector(false);
+  }, [onMarketChange]);
+
+  if (!effectiveMarketId) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center h-full gap-4 p-4 text-center">
-          <div className="text-muted-foreground text-sm mb-2">
-            Select a market to view order book
-          </div>
-          <Button
-            onClick={handleShowMarketSelector}
-            variant="outline"
-            size="sm"
-          >
-            <Search className="h-4 w-4 mr-2" />
-            Select Market
-          </Button>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="Select a market to view order book"
+          description="Use the search icon in the navbar to select a market"
+          action={{
+            label: 'Select Market',
+            onClick: () => setShowMarketSelector(true),
+          }}
+          className="p-4"
+        />
         <MarketSelector
           open={showMarketSelector}
           onOpenChange={handleCloseMarketSelector}
+          onSelect={handleMarketSelect}
         />
       </>
     );
@@ -257,35 +268,34 @@ function OrderBookCardComponent() {
     <>
       <div className="h-full flex flex-col overflow-hidden">
         {/* Outcome Selector */}
-        <div className="flex gap-2 p-2 border-b border-border">
+        <div className="flex-shrink-0 flex gap-2 px-3 py-2 border-b border-border bg-accent/20">
           <Button
-            variant={selectedOutcome === 'YES' ? 'default' : 'outline'}
+            variant={selectedOutcome === 'YES' ? 'buy' : 'outline'}
             size="sm"
             onClick={() => setSelectedOutcome('YES')}
-            className="flex-1"
+            className="flex-1 text-xs"
           >
             YES
           </Button>
           <Button
-            variant={selectedOutcome === 'NO' ? 'default' : 'outline'}
+            variant={selectedOutcome === 'NO' ? 'sell' : 'outline'}
             size="sm"
             onClick={() => setSelectedOutcome('NO')}
-            className="flex-1"
+            className="flex-1 text-xs"
           >
             NO
           </Button>
         </div>
 
         {/* Order Book Table - Vertical Layout */}
-        <div className="flex-1 overflow-y-auto bg-background">
+        <div className="flex-1 min-h-0 overflow-y-auto bg-background">
           <div className="w-full text-xs">
             {/* Header */}
             <div className="sticky top-0 bg-background border-b border-border z-10">
-              <div className="grid grid-cols-[80px_1fr_1fr_1fr] gap-2 px-2 py-1.5 font-semibold text-muted-foreground">
-                <div>Price</div>
-                <div className="text-right">Shares</div>
-                <div className="text-right">Dollars</div>
-                <div></div>
+              <div className="grid grid-cols-[80px_1fr_1fr] gap-2 px-3 py-2">
+                <div className="text-xs font-semibold text-muted-foreground">Price</div>
+                <div className="text-xs font-semibold text-muted-foreground text-right">Shares</div>
+                <div className="text-xs font-semibold text-muted-foreground text-right">Dollars</div>
               </div>
             </div>
 
@@ -295,32 +305,25 @@ function OrderBookCardComponent() {
               return (
                 <div
                   key={`ask-${index}`}
-                  className="grid grid-cols-[80px_1fr_1fr_1fr] gap-2 px-2 py-1 hover:bg-muted/30 transition-colors relative"
+                  className="grid grid-cols-[80px_1fr_1fr] gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors relative border-b border-border/30"
                 >
                   {/* Orange/Red horizontal bar proportional to share quantity */}
                   <div
-                    className="absolute left-0 top-0 bottom-0 bg-orange-500/40 pointer-events-none"
+                    className="absolute left-0 top-0 bottom-0 bg-orange-500/30 pointer-events-none"
                     style={{ width: `${barWidth}%` }}
                   />
-                  {/* Darker orange/red bar overlay */}
-                  <div
-                    className="absolute left-0 top-0 bottom-0 bg-orange-600/50 pointer-events-none"
-                    style={{ width: `${Math.min(barWidth * 0.7, 100)}%` }}
-                  />
-                  <div className="font-mono text-orange-500 relative z-10">{formatPrice(ask.price)}</div>
-                  <div className="font-mono text-right text-foreground relative z-10">{formatShares(ask.size)}</div>
-                  <div className="font-mono text-right text-foreground relative z-10">{formatDollars(ask.dollars)}</div>
-                  <div></div>
+                  <div className="font-mono text-xs text-orange-500 relative z-10 font-semibold">{formatPrice(ask.price)}</div>
+                  <div className="font-mono text-xs text-right text-foreground relative z-10 font-medium">{formatShares(ask.size)}</div>
+                  <div className="font-mono text-xs text-right text-foreground relative z-10 font-medium">{formatDollars(ask.dollars)}</div>
                 </div>
               );
             })}
 
             {/* Spread Row - Middle Separator */}
-            <div className="grid grid-cols-[80px_1fr_1fr_1fr] gap-2 px-2 py-1.5 bg-muted/50 border-y border-border sticky top-[33px] z-10">
-              <div className="font-mono text-center text-foreground">{formatPrice(spread)}</div>
-              <div className="text-center font-semibold text-foreground">Spread</div>
-              <div className="font-mono text-right text-foreground">{spreadPercent.toFixed(1)}%</div>
-              <div></div>
+            <div className="grid grid-cols-[80px_1fr_1fr] gap-2 px-3 py-2 bg-transparent border-y-2 border-primary/20 sticky top-[36px] z-10">
+              <div className="font-mono text-xs text-center font-semibold text-foreground">{formatPrice(spread)}</div>
+              <div className="text-xs font-semibold text-center text-foreground">Spread</div>
+              <div className="font-mono text-xs text-right font-semibold text-foreground">{spreadPercent.toFixed(1)}%</div>
             </div>
 
             {/* Bids (Buy Orders) - Bottom */}
@@ -329,22 +332,16 @@ function OrderBookCardComponent() {
               return (
                 <div
                   key={`bid-${index}`}
-                  className="grid grid-cols-[80px_1fr_1fr_1fr] gap-2 px-2 py-1 hover:bg-muted/30 transition-colors relative"
+                  className="grid grid-cols-[80px_1fr_1fr] gap-2 px-3 py-1.5 hover:bg-accent/30 transition-colors relative border-b border-border/30"
                 >
                   {/* Blue horizontal bar proportional to share quantity */}
                   <div
-                    className="absolute left-0 top-0 bottom-0 bg-blue-500/40 pointer-events-none"
+                    className="absolute left-0 top-0 bottom-0 bg-blue-500/30 pointer-events-none"
                     style={{ width: `${barWidth}%` }}
                   />
-                  {/* Darker blue bar overlay */}
-                  <div
-                    className="absolute left-0 top-0 bottom-0 bg-blue-600/50 pointer-events-none"
-                    style={{ width: `${Math.min(barWidth * 0.7, 100)}%` }}
-                  />
-                  <div className="font-mono text-blue-400 relative z-10">{formatPrice(bid.price)}</div>
-                  <div className="font-mono text-right text-foreground relative z-10">{formatShares(bid.size)}</div>
-                  <div className="font-mono text-right text-foreground relative z-10">{formatDollars(bid.dollars)}</div>
-                  <div></div>
+                  <div className="font-mono text-xs text-blue-400 relative z-10 font-semibold">{formatPrice(bid.price)}</div>
+                  <div className="font-mono text-xs text-right text-foreground relative z-10 font-medium">{formatShares(bid.size)}</div>
+                  <div className="font-mono text-xs text-right text-foreground relative z-10 font-medium">{formatDollars(bid.dollars)}</div>
                 </div>
               );
             })}
@@ -355,6 +352,7 @@ function OrderBookCardComponent() {
       <MarketSelector
         open={showMarketSelector}
         onOpenChange={handleCloseMarketSelector}
+        onSelect={handleMarketSelect}
       />
     </>
   );

@@ -102,16 +102,29 @@ export async function GET(request: NextRequest) {
               console.log(`[API] Assigning event image to market "${market.question || market.id}" (no market image available):`, eventImage);
             }
             
+            // Extract Series information (Events can belong to Series)
+            // Series is an array, take the first one if available
+            const series = Array.isArray(event.series) && event.series.length > 0 ? event.series[0] : null;
+            const seriesId = series?.id?.toString() || event.seriesId?.toString() || event.series_id?.toString() || null;
+            const seriesTitle = series?.title || series?.name || null;
+            const seriesImageUrl = series?.image || series?.imageUrl || series?.icon || null;
+            const seriesSlug = series?.slug || event.seriesSlug || null;
+            
             return {
               ...market,
               // Assign the matching tag slug as the category
               category: matchingTag?.slug || filterValue,
-              // Use improved image fallback chain (market image first, then event image)
+              // Use improved image fallback chain (market image first, then event image, then series image)
               imageUrl: finalImageUrl,
               // Store event information for grouping
               eventId: event.id || event.slug || event.title,
               eventImageUrl: eventImage,
               eventTitle: event.title || event.name,
+              // Store series information for Series-level grouping
+              seriesId: seriesId || undefined,
+              seriesTitle: seriesTitle || undefined,
+              seriesImageUrl: seriesImageUrl || undefined,
+              seriesSlug: seriesSlug || undefined,
             };
           });
           }
@@ -213,14 +226,29 @@ export async function GET(request: NextRequest) {
               console.log(`[API] Assigning event image to market "${market.question || market.id}" (no market image available):`, eventImage);
             }
             
+            // Extract Series information (Events can belong to Series)
+            // Series is an array, take the first one if available
+            const series = Array.isArray(event.series) && event.series.length > 0 ? event.series[0] : null;
+            const seriesId = series?.id?.toString() || event.seriesId?.toString() || event.series_id?.toString() || null;
+            const seriesTitle = series?.title || series?.name || null;
+            const seriesImageUrl = series?.image || series?.imageUrl || series?.icon || null;
+            const seriesSlug = series?.slug || event.seriesSlug || null;
+            
             return {
               ...market,
-              // Use improved image fallback chain (market image first, then event image)
+              // Use improved image fallback chain (market image first, then event image, then series image)
               imageUrl: finalImageUrl,
               // Store event information for grouping
-              eventId: event.id || event.slug || event.title,
+              // IMPORTANT: eventId must be a numeric ID (string), not slug or title
+              // The comments API requires a numeric parent_entity_id
+              eventId: event.id ? event.id.toString() : undefined,
               eventImageUrl: eventImage,
               eventTitle: event.title || event.name,
+              // Store series information for Series-level grouping
+              seriesId: seriesId || undefined,
+              seriesTitle: seriesTitle || undefined,
+              seriesImageUrl: seriesImageUrl || undefined,
+              seriesSlug: seriesSlug || undefined,
             };
           });
         }

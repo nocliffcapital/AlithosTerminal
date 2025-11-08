@@ -82,6 +82,32 @@ Add to `apps/web/.env.local`:
 NEXT_PUBLIC_POLYMARKET_SUBGRAPH_URL=https://api.thegraph.com/subgraphs/name/polymarket/...
 ```
 
+### 5. AI Market Research APIs (Optional)
+**What it does**: AI-powered market research and analysis
+
+**Required**: ❌ NO - Market research card requires these
+**Where to get it**:
+
+#### Grok API (xAI) - For research content generation
+1. Visit xAI Console: https://console.x.ai
+2. Sign up or sign in
+3. Go to API Keys section
+4. Generate API key
+5. Add to `apps/web/.env.local`:
+   ```bash
+   GROK_API_KEY=your_grok_api_key_here
+   ```
+
+#### OpenAI API - For multi-agent analysis
+1. Visit OpenAI Platform: https://platform.openai.com
+2. Sign up or sign in
+3. Go to API Keys section
+4. Create new secret key
+5. Add to `apps/web/.env.local`:
+   ```bash
+   OPENAI_API_KEY=your_openai_api_key_here
+   ```
+
 ---
 
 ## 📋 Step-by-Step Setup
@@ -101,6 +127,10 @@ NEXT_PUBLIC_POLYMARKET_CLOB_API_KEY=your_clob_api_key_here
 
 # Subgraph (for historical charts)
 NEXT_PUBLIC_POLYMARKET_SUBGRAPH_URL=https://api.thegraph.com/subgraphs/name/polymarket/...
+
+# AI Market Research APIs (for Market Research card)
+GROK_API_KEY=your_grok_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 ### Step 2: Get CLOB API Key (Optional)

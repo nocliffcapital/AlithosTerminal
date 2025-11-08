@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { withRateLimit, rateLimitConfigs } from '@/lib/middleware-api';
 import { polymarketClient } from '@/lib/api/polymarket';
-import { valyuClient } from '@/lib/api/valyu';
 import { planResearchStrategy } from '@/lib/market-research/research-strategy';
 import { gradeSource } from '@/lib/market-research/source-grading';
-import { runMultiAgentAnalysis } from '@/lib/market-research/multi-agent-analysis';
+import { runMultiAgentAnalysis, runResearchAgent, EventContext } from '@/lib/market-research/multi-agent-analysis';
 import { applyBayesianReasoning } from '@/lib/market-research/bayesian-reasoning';
-import { FinalVerdict, MarketResearchResult, GradedSource } from '@/lib/market-research/types';
+import { FinalVerdict, MarketResearchResult, GradedSource, ValyuResult } from '@/lib/market-research/types';
 import { getPrismaClient } from '@/lib/prisma';
 import { z } from 'zod';
 
@@ -99,39 +98,60 @@ async function handler(request: NextRequest) {
     console.log('[Market Research] Planning research strategy...');
     const researchStrategy = planResearchStrategy(market);
 
-    // Step 3: Execute Valyu searches for relevant queries
-    console.log('[Market Research] Executing Valyu searches...');
-    if (!valyuClient.isConfigured()) {
+    // Step 2.5: Detect event context if market is part of an event group
+    let eventContext: EventContext | undefined;
+    const eventId = market.eventId;
+    const hasEventInfo = eventId && (market as any).eventTitle;
+    
+    if (hasEventInfo) {
+      console.log(`[Market Research] Market is part of event: ${(market as any).eventTitle}`);
+      try {
+        // Fetch all markets to find event group
+        const allMarkets = await polymarketClient.getMarkets({ active: true });
+        const eventMarkets = allMarkets.filter(m => m.eventId === eventId);
+        
+        if (eventMarkets.length > 1) {
+          console.log(`[Market Research] Found ${eventMarkets.length} markets in event`);
+          eventContext = {
+            eventTitle: (market as any).eventTitle,
+            allMarkets: eventMarkets,
+            analyzedMarketId: market.id,
+          };
+        }
+      } catch (error) {
+        console.error('[Market Research] Failed to fetch event markets:', error);
+        // Continue without event context
+      }
+    }
+
+    // Step 3: Execute Research Agent to gather information
+    console.log('[Market Research] Running Research Agent...');
+    let uniqueResults: ValyuResult[] = [];
+    try {
+      // Add timeout wrapper for research agent (60 seconds max)
+      const researchPromise = runResearchAgent(market, researchStrategy, eventContext);
+      const timeoutPromise = new Promise<ValyuResult[]>((_, reject) => {
+        setTimeout(() => reject(new Error('Research agent timed out after 60 seconds')), 60000);
+      });
+      
+      const researchResults = await Promise.race([researchPromise, timeoutPromise]);
+      uniqueResults = researchResults;
+      
+      console.log(`[Market Research] Research Agent found ${uniqueResults.length} sources`);
+    } catch (error) {
+      console.error('[Market Research] Research Agent failed:', error);
       return NextResponse.json(
-        { error: 'Valyu API key not configured. Please set VALYU_API_KEY environment variable.' },
+        {
+          error: 'Research agent failed',
+          details: error instanceof Error ? error.message : 'Unknown error',
+        },
         { status: 500 }
       );
     }
 
-    // Collect all search results
-    const allSearchResults: any[] = [];
-    for (let i = 0; i < researchStrategy.searchQueries.length; i++) {
-      const query = researchStrategy.searchQueries[i];
-      console.log(`[Market Research] Searching query ${i + 1}/${researchStrategy.searchQueries.length}: "${query}"`);
-      try {
-        const results = await valyuClient.search(query);
-        allSearchResults.push(...results);
-        console.log(`[Market Research] Found ${results.length} results for query "${query}"`);
-      } catch (error) {
-        console.error(`[Market Research] Valyu search failed for query "${query}":`, error);
-        // Continue with other queries even if one fails
-      }
-    }
-    console.log(`[Market Research] Total search results: ${allSearchResults.length}`);
-
-    // Deduplicate results by URL
-    const uniqueResults = Array.from(
-      new Map(allSearchResults.map(r => [r.url, r])).values()
-    );
-
     if (uniqueResults.length === 0) {
       return NextResponse.json(
-        { error: 'No search results found. Please try again later.' },
+        { error: 'No research results found. Please try again later.' },
         { status: 500 }
       );
     }
@@ -263,5 +283,5 @@ function determineFinalVerdict(probabilities: {
 export const POST = withRateLimit(handler, rateLimitConfigs.write);
 
 // Increase max duration for this route (Vercel/serverless functions)
-export const maxDuration = 120; // 120 seconds (2 minutes)
+export const maxDuration = 180; // 180 seconds (3 minutes) - increased for OpenAI API calls
 

@@ -59,6 +59,8 @@ interface ThemeState {
   deleteCustomTheme: (name: string) => void;
   exportTheme: () => string;
   importTheme: (json: string) => void;
+  resetToDefault: () => void;
+  getDefaultTheme: () => ThemeConfig;
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -87,6 +89,10 @@ export const useThemeStore = create<ThemeState>()(
           console.error('Failed to import theme:', error);
         }
       },
+      resetToDefault: () => {
+        set({ currentTheme: defaultTheme });
+      },
+      getDefaultTheme: () => defaultTheme,
     }),
     {
       name: 'theme-storage',

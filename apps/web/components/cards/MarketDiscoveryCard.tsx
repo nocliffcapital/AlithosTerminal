@@ -5,10 +5,11 @@ import { useMarkets } from '@/lib/hooks/usePolymarketData';
 import { useMarketStore } from '@/stores/market-store';
 import { useWatchlistStore } from '@/stores/watchlist-store';
 import { useLayoutStore } from '@/stores/layout-store';
-import { Loader2, Search, Plus, Check, ChevronDown, ChevronRight, Calendar, DollarSign, BarChart3, Tag, TrendingUp, TrendingDown, Grid3x3, MoreVertical, BarChart2, Newspaper, FileText, Star } from 'lucide-react';
+import { Loader2, Search, Plus, Check, ChevronDown, ChevronRight, Calendar, DollarSign, BarChart3, Tag, TrendingUp, TrendingDown, MoreVertical, BarChart2, Newspaper, FileText, Star, ArrowUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -109,23 +110,38 @@ const SORT_OPTIONS = [
 ];
 
 // Available card types that can be created from a market
-const MARKET_CARD_TYPES: Array<{ type: 'chart' | 'news' | 'resolution-criteria' | 'market-info'; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+const MARKET_CARD_TYPES: Array<{ type: 'chart' | 'news' | 'resolution-criteria' | 'market-info' | 'market-trade'; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { type: 'chart', label: 'Create Chart', icon: BarChart2 },
   { type: 'news', label: 'Open in News Card', icon: Newspaper },
+  { type: 'market-trade', label: 'Open in Market Trade', icon: ArrowUpDown },
   { type: 'resolution-criteria', label: 'View Resolution Criteria', icon: FileText },
   { type: 'market-info', label: 'View Market Info', icon: FileText },
 ];
 
 function MarketDiscoveryCardComponent() {
-  const { selectMarket } = useMarketStore();
+  const { selectMarket, selectedMarketId } = useMarketStore();
   const { marketIds: watchlistIds, addToWatchlist, removeFromWatchlist, isInWatchlist, addEventToWatchlist, removeEventFromWatchlist, isEventInWatchlist } = useWatchlistStore();
   const { addCard, favouriteCardTypes, toggleFavouriteCardType, isFavouriteCardType } = useLayoutStore();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('volume');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('active');
-  const [showMultiOutcomeOnly, setShowMultiOutcomeOnly] = useState<boolean>(false);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Focus search on Cmd/Ctrl + K
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Map our category ID to Polymarket's category value
   const polymarketCategory = CATEGORY_MAP[selectedCategory] || undefined;
@@ -161,21 +177,26 @@ function MarketDiscoveryCardComponent() {
       markets: typeof markets;
       category?: string;
       endDate?: string;
-      imageUrl?: string; // Image for the group (from event or first market)
+      imageUrl?: string; // Image for the group (from series, event, or first market)
       eventId?: string; // Event ID for grouping
       eventImageUrl?: string; // Event image (preferred for multimarkets)
+      seriesId?: string; // Series ID for grouping (Series → Events → Markets hierarchy)
+      seriesImageUrl?: string; // Series image (preferred over event image for Series-level grouping)
+      seriesTitle?: string; // Series title
     }
 
     const groups: Record<string, MarketGroup> = {};
     const standalone: typeof marketsList = [];
     const eventGroups: Record<string, MarketGroup> = {}; // Group by eventId
+    const seriesGroups: Record<string, MarketGroup> = {}; // Group by seriesId (highest level)
 
     marketsList.forEach((market) => {
-      // First, check if this market is part of an event
-      // Markets from the same event should be grouped together
+      // First, check if this market is part of a Series (Series → Events → Markets hierarchy)
+      // Series is the highest level grouping - markets in the same Series should be grouped together
       // Note: A market with tokens > 2 is a single multimarket (one market with multiple outcomes),
       // so it should NOT be grouped with other markets - it should be standalone
       const isMultimarket = market.tokens && market.tokens.length > 2;
+      const hasSeriesInfo = market.seriesId && (market as any).seriesTitle;
       const hasEventInfo = market.eventId && (market as any).eventTitle;
       
       // If it's a single multimarket (tokens > 2), don't group it - it's already complete
@@ -184,7 +205,94 @@ function MarketDiscoveryCardComponent() {
         return;
       }
       
-      // If market is part of an event, group by eventId
+      // If market is part of a Series, group by seriesId (highest priority)
+      // Series → Events → Markets: Series is the top-level grouping
+      if (hasSeriesInfo) {
+        const seriesKey = `series:${market.seriesId}`;
+        
+        if (!seriesGroups[seriesKey]) {
+          // Use series title as base question
+          const seriesTitle = (market as any).seriesTitle;
+          let baseQuestion = seriesTitle || market.question;
+          
+          // If series title is not available, try event title or extract from market question
+          if (!baseQuestion && hasEventInfo) {
+            baseQuestion = (market as any).eventTitle || market.question;
+          }
+          
+          // If still no base question, try to extract from market question
+          if (!baseQuestion) {
+            const question = market.question || '';
+            const winPattern = /^Will\s+([^?]+?)\s+win\s+(.+?)\?$/i;
+            const bePattern = /^Will\s+([^?]+?)\s+be\s+(.+?)\?$/i;
+            
+            let match = question.match(winPattern);
+            let isWinQuestion = true;
+            
+            if (!match) {
+              match = question.match(bePattern);
+              isWinQuestion = false;
+            }
+            
+            if (match && match.length >= 3) {
+              const eventPart = match[2].trim();
+              baseQuestion = isWinQuestion 
+                ? `Who will win ${eventPart}?`
+                : `Who will be ${eventPart}?`;
+            } else {
+              baseQuestion = question;
+            }
+          }
+          
+          seriesGroups[seriesKey] = {
+            baseQuestion,
+            markets: [],
+            category: market.category,
+            endDate: market.endDate,
+            // For Series groups, prioritize series image over event image
+            imageUrl: (market as any).seriesImageUrl || (market as any).eventImageUrl || undefined,
+            seriesId: market.seriesId,
+            seriesImageUrl: (market as any).seriesImageUrl,
+            seriesTitle: seriesTitle,
+            eventId: market.eventId,
+            eventImageUrl: (market as any).eventImageUrl,
+          };
+        }
+        
+        // Extract option name from market question (same logic as event grouping)
+        const question = market.question || '';
+        const winPattern = /^Will\s+([^?]+?)\s+win\s+(.+?)\?$/i;
+        const bePattern = /^Will\s+([^?]+?)\s+be\s+(.+?)\?$/i;
+        
+        let match = question.match(winPattern);
+        if (!match) {
+          match = question.match(bePattern);
+        }
+        
+        const optionName = match && match.length >= 3 ? match[1].trim() : (question.split('?')[0] || question);
+        
+        // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
+        const volume = market.volume || 0;
+        const liquidity = market.liquidity || 0;
+        if (volume > 0 || liquidity > 0) {
+          seriesGroups[seriesKey].markets.push({
+            ...market,
+            optionName, // Store the extracted option name
+          } as any);
+        }
+        
+        // Always prioritize series image for Series group header
+        if ((market as any).seriesImageUrl) {
+          if (!seriesGroups[seriesKey].seriesImageUrl) {
+            seriesGroups[seriesKey].seriesImageUrl = (market as any).seriesImageUrl;
+          }
+          seriesGroups[seriesKey].imageUrl = (market as any).seriesImageUrl;
+        }
+        
+        return; // Skip event grouping for Series-grouped markets
+      }
+      
+      // If market is part of an event (but not a Series), group by eventId
       if (hasEventInfo) {
         const eventKey = `event:${market.eventId}`;
         
@@ -252,10 +360,15 @@ function MarketDiscoveryCardComponent() {
         
         const optionName = match && match.length >= 3 ? match[1].trim() : (question.split('?')[0] || question);
         
-        eventGroups[eventKey].markets.push({
-          ...market,
-          optionName, // Store the extracted option name
-        } as any);
+        // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
+        const volume = market.volume || 0;
+        const liquidity = market.liquidity || 0;
+        if (volume > 0 || liquidity > 0) {
+          eventGroups[eventKey].markets.push({
+            ...market,
+            optionName, // Store the extracted option name
+          } as any);
+        }
         
         // Always use event image for group header (not individual market images)
         // This ensures the group shows the correct event logo/seal
@@ -313,21 +426,116 @@ function MarketDiscoveryCardComponent() {
           groups[key].imageUrl = market.imageUrl;
         }
         
-        groups[key].markets.push({
-          ...market,
-          optionName, // Store the extracted option name
-        } as any);
+        // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
+        const volume = market.volume || 0;
+        const liquidity = market.liquidity || 0;
+        if (volume > 0 || liquidity > 0) {
+          groups[key].markets.push({
+            ...market,
+            optionName, // Store the extracted option name
+          } as any);
+        }
       } else {
-        // Market doesn't match the pattern, keep as standalone
-        standalone.push(market);
+        // Try to detect date-based variations of the same question
+        // Pattern: "[TOPIC] in [YEAR]?" or "[TOPIC] by [DATE]?"
+        // Examples: "Russia x Ukraine ceasefire in 2025?" vs "Russia x Ukraine ceasefire by March 31, 2026?"
+        const datePattern = /^(.+?)\s+(?:in|by|before|after|until|on)\s+(.+?)\?$/i;
+        const dateMatch = question.match(datePattern);
+        
+        if (dateMatch && dateMatch.length >= 3) {
+          // Extract the base topic (everything before the date)
+          const baseTopic = dateMatch[1].trim();
+          
+          // Normalize the base topic for grouping (remove extra spaces, lowercase for comparison)
+          const normalizedTopic = baseTopic.toLowerCase().replace(/\s+/g, ' ').trim();
+          
+          // Create a key based on normalized topic and category
+          // Don't include date in key so markets with different dates can be grouped
+          const key = `topic:${normalizedTopic}|${market.category || ''}`;
+          
+          if (!groups[key]) {
+            // Use the base topic as the group title (without the date)
+            groups[key] = {
+              baseQuestion: `${baseTopic}?`, // Base question without date
+              markets: [],
+              category: market.category,
+              endDate: market.endDate,
+              imageUrl: market.imageUrl,
+            };
+          }
+          
+          // If group doesn't have an imageUrl yet, use this market's imageUrl if it has one
+          if (!groups[key].imageUrl && market.imageUrl) {
+            groups[key].imageUrl = market.imageUrl;
+          }
+          
+          // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
+          const volume = market.volume || 0;
+          const liquidity = market.liquidity || 0;
+          if (volume > 0 || liquidity > 0) {
+            groups[key].markets.push({
+              ...market,
+              optionName: dateMatch[2].trim(), // Store the date/condition as option name
+            } as any);
+          }
+        } else {
+          // Market doesn't match any pattern, keep as standalone
+          standalone.push(market);
+        }
       }
     });
 
     // Filter groups to only include those with 2+ markets (meaningful grouping)
     const groupedResults: Array<{ type: 'group'; group: MarketGroup; key: string } | { type: 'standalone'; market: typeof marketsList[0] }> = [];
     
-    // Process event groups first (these are actual multimarkets)
+    // Process Series groups first (highest level grouping: Series → Events → Markets)
+    Object.entries(seriesGroups).forEach(([key, group]) => {
+      if (group.markets.length >= 2) {
+        // Sort by probability descending
+        group.markets.sort((a, b) => {
+          const probA = (a.outcomePrices?.YES || 0) * 100;
+          const probB = (b.outcomePrices?.YES || 0) * 100;
+          return probB - probA;
+        });
+        
+        // For Series groups, always use series image for the group header (not event or market images)
+        // This ensures the group shows the correct Series logo/image
+        if (group.seriesImageUrl) {
+          group.imageUrl = group.seriesImageUrl;
+        } else if (!group.imageUrl && group.markets.length > 0) {
+          // Only fall back to event image if no series image exists
+          if (group.eventImageUrl) {
+            group.imageUrl = group.eventImageUrl;
+          } else {
+            // Last resort: use a market image
+            const marketWithImage = group.markets.find((m: any) => m.imageUrl && 
+              !m.imageUrl.includes('placeholder') && 
+              !m.imageUrl.includes('default'));
+            if (marketWithImage) {
+              group.imageUrl = marketWithImage.imageUrl;
+            }
+          }
+        }
+        
+        groupedResults.push({ type: 'group', group, key });
+      } else {
+        // Single market in Series group, treat as standalone
+        standalone.push(group.markets[0]);
+      }
+    });
+    
+    // Process event groups (these are actual multimarkets, but not part of a Series)
     Object.entries(eventGroups).forEach(([key, group]) => {
+      // Skip if already in Series group
+      const alreadyInSeriesGroup = groupedResults.some(
+        (item) => item.type === 'group' && item.group.markets.some((m: any) => 
+          group.markets.some((gm: any) => gm.id === m.id)
+        )
+      );
+      
+      if (alreadyInSeriesGroup) {
+        return; // Skip - already grouped by Series
+      }
       if (group.markets.length >= 2) {
         // Sort by probability descending
         group.markets.sort((a, b) => {
@@ -360,15 +568,15 @@ function MarketDiscoveryCardComponent() {
     
     // Process pattern-matched groups
     Object.entries(groups).forEach(([key, group]) => {
-      // Skip if already in event group
-      const alreadyInEventGroup = groupedResults.some(
+      // Skip if already in Series or Event group
+      const alreadyGrouped = groupedResults.some(
         (item) => item.type === 'group' && item.group.markets.some((m: any) => 
           group.markets.some((gm: any) => gm.id === m.id)
         )
       );
       
-      if (alreadyInEventGroup) {
-        return; // Skip - already grouped by event
+      if (alreadyGrouped) {
+        return; // Skip - already grouped by Series or Event
       }
       
       if (group.markets.length >= 2) {
@@ -400,7 +608,20 @@ function MarketDiscoveryCardComponent() {
   }, []);
 
   const filteredAndSortedMarkets = useMemo(() => {
+    // Helper function to detect if a market is resolved
+    const isResolvedMarket = (market: typeof markets[0]): boolean => {
+      if (!market.outcomePrices) return false;
+      // A market is resolved if YES price is 0 or 1 (or NO price is 0 or 1)
+      const yesPrice = market.outcomePrices.YES;
+      const noPrice = market.outcomePrices.NO;
+      // Resolved: YES is 0 (NO won) or YES is 1 (YES won)
+      return yesPrice === 0 || yesPrice === 1 || noPrice === 0 || noPrice === 1;
+    };
+    
     let filtered = [...markets];
+    
+    // Filter out resolved markets from the main list
+    filtered = filtered.filter((market) => !isResolvedMarket(market));
     
     // Smarter filtering: Group markets by event and detect outcome tokens based on event structure
     // Outcome tokens typically have:
@@ -440,15 +661,33 @@ function MarketDiscoveryCardComponent() {
       if (/^another\s+(?:company|movie|person|team|player|candidate|option|outcome|choice)/i.test(q)) return true;
       
       // Pattern: "someone else", "someone", "other", "others", etc. - generic placeholder outcomes
+      // Check both standalone and in "Will someone else..." questions
       if (/^(?:someone\s+else|someone|other|others|none|other\s+option|other\s+choice)$/i.test(q)) return true;
+      
+      // Pattern: "Will someone else..." - these are generic placeholder outcomes in multi-outcome markets
+      // This catches cases like "Will someone else be the 2025 Drivers Champion?"
+      if (/^Will\s+(?:someone\s+else|someone|other|others|none|other\s+option|other\s+choice)\s+(?:win|be|have)/i.test(q)) return true;
       
       return false;
     };
     
     // Filter out outcome tokens based on event structure
     filtered = filtered.filter((market) => {
+      const question = market.question || '';
+      
+      // Aggressively filter out "Will someone else..." questions - these are placeholder outcomes
+      // that shouldn't exist as standalone markets (they don't exist on Polymarket)
+      // Note: This does NOT filter out legitimate resolved markets like "Will [Driver Name] be..."
+      // which have real names and should be shown even if resolved to Yes/No
+      if (/^Will\s+(?:someone\s+else|someone|other|others|none|other\s+option|other\s+choice)\s+(?:win|be|have)/i.test(question)) {
+        // Always filter out "Will someone else..." questions - they're placeholder outcomes
+        return false;
+      }
+      
       // If market has generic name pattern, check if it's part of an event
-      if (market.eventId && isGenericOutcome(market.question || '')) {
+      // Note: Real markets with actual names (like driver names) won't match isGenericOutcome()
+      // so they'll pass through even if resolved
+      if (market.eventId && isGenericOutcome(question)) {
         const eventMarkets = marketsByEvent[market.eventId] || [];
         
         // If event has 3+ markets (multimarket), and this is a generic outcome, filter it out
@@ -461,12 +700,14 @@ function MarketDiscoveryCardComponent() {
           
           // If it's a generic outcome with no volume/liquidity, filter it out
           // This catches "Person A", "Person B", "someone else", etc. in multimarkets
+          // Note: Resolved markets with real names will have volume and pass through
           if (!hasAnyVolume && !hasAnyLiquidity) {
             return false; // Filter out - likely an outcome token
           }
           
           // Even if it has some volume, if it's very low (< $100) and it's a generic outcome in a multimarket, filter it
           // Real markets in multimarkets typically have more activity
+          // Note: Resolved markets typically have significant historical volume, so they'll pass through
           const hasVeryLowVolume = market.volume && market.volume > 0 && market.volume < 100;
           const hasVeryLowLiquidity = market.liquidity && market.liquidity > 0 && market.liquidity < 10;
           
@@ -477,7 +718,8 @@ function MarketDiscoveryCardComponent() {
       }
       
       // Also filter generic outcomes even if not part of an event (standalone generic outcomes)
-      if (!market.eventId && isGenericOutcome(market.question || '')) {
+      // Note: Real markets with actual names won't match isGenericOutcome() so they'll pass through
+      if (!market.eventId && isGenericOutcome(question)) {
         // If it has no volume/liquidity and is a generic outcome, likely filter it out
         const hasAnyVolume = market.volume && market.volume > 0;
         const hasAnyLiquidity = market.liquidity && market.liquidity > 0;
@@ -487,7 +729,7 @@ function MarketDiscoveryCardComponent() {
         }
       }
       
-      return true; // Keep the market
+      return true; // Keep the market (including resolved markets with real names)
     });
 
     // ALWAYS filter by category client-side (Gamma API doesn't support category filtering properly)
@@ -527,50 +769,6 @@ function MarketDiscoveryCardComponent() {
       );
     }
     
-    // Filter by multi-outcome markets only
-    if (showMultiOutcomeOnly) {
-      const beforeCount = filtered.length;
-      filtered = filtered.filter((market) => {
-        // Check if market has multiple outcomes - try multiple detection methods
-        // Method 1: Check tokens array (most reliable)
-        if (market.tokens && market.tokens.length > 2) {
-          return true;
-        }
-        
-        // Method 2: Check clobTokenIds array
-        if (market.clobTokenIds && market.clobTokenIds.length > 2) {
-          return true;
-        }
-        
-        // Method 3: Check question pattern - "Who will" questions are often multi-outcome
-        const question = market.question?.toLowerCase() || '';
-        if (question.startsWith('who will') || question.startsWith('who will be')) {
-          return true;
-        }
-        
-        // Method 4: Check if question suggests multiple options (contains "top", "largest", "best", "champion", "winner" with "who")
-        const multiOutcomeKeywords = ['who will win', 'who will be', 'who will have', 'top grossing', 'largest company', 'drivers champion', 'mvp', 'cy young'];
-        if (multiOutcomeKeywords.some(keyword => question.includes(keyword))) {
-          return true;
-        }
-        
-        return false;
-      });
-      const afterCount = filtered.length;
-      if (beforeCount > 0 && afterCount === 0) {
-        console.log(`[MarketDiscovery] Multi-outcome filter: ${beforeCount} markets before, ${afterCount} after. Sample markets:`, 
-          markets.slice(0, 5).map(m => ({ 
-            id: m.id?.substring(0, 20), 
-            question: m.question?.substring(0, 50),
-            tokensCount: m.tokens?.length || 0,
-            clobTokenIdsCount: m.clobTokenIds?.length || 0,
-            hasTokens: !!m.tokens,
-            hasClobTokenIds: !!m.clobTokenIds
-          }))
-        );
-      }
-    }
-
     // Sort markets
     filtered.sort((a, b) => {
       switch (sortBy) {
@@ -594,7 +792,7 @@ function MarketDiscoveryCardComponent() {
     });
 
     return filtered;
-  }, [markets, searchQuery, sortBy, selectedCategory, polymarketCategory, showMultiOutcomeOnly]);
+  }, [markets, searchQuery, sortBy, selectedCategory, polymarketCategory]);
 
   // Group related markets after filtering and sorting - memoize this expensive operation
   const groupedMarkets = useMemo(() => {
@@ -651,32 +849,19 @@ function MarketDiscoveryCardComponent() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 p-2 sm:p-3 border-b border-border space-y-2">
-        <div className="text-xs sm:text-sm font-semibold">Market Discovery</div>
-        
-        {/* Search and Category Filter */}
+      <div className="flex-shrink-0 px-3 py-2.5 border-b border-border bg-accent/20 space-y-2">
+        {/* Search and Filters - All in one line */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               placeholder="Search markets..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-7 sm:pl-8 h-8 sm:h-9 text-xs sm:text-sm"
+              className="h-10 pl-8 pr-2 text-xs bg-background"
             />
           </div>
-          
-          {/* Multi-Outcome Filter Toggle */}
-          <Button
-            variant={showMultiOutcomeOnly ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowMultiOutcomeOnly(!showMultiOutcomeOnly)}
-            className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm flex-shrink-0"
-            title={showMultiOutcomeOnly ? "Show all markets" : "Show only multi-outcome markets"}
-          >
-            <Grid3x3 className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5" />
-            <span className="hidden sm:inline">Multi</span>
-          </Button>
           
           {/* Category Dropdown */}
           <DropdownMenu>
@@ -684,12 +869,12 @@ function MarketDiscoveryCardComponent() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 sm:h-9 px-2 sm:px-3 text-xs sm:text-sm flex-shrink-0"
+                className="text-xs px-2.5 flex-shrink-0"
               >
-                <span className="mr-1.5">
+                <span className="mr-1">
                   {CATEGORIES.find((c) => c.id === selectedCategory)?.label || 'All'}
                 </span>
-                <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
+                <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 max-h-[400px] overflow-y-auto">
@@ -703,7 +888,7 @@ function MarketDiscoveryCardComponent() {
               
               {/* Group categories by type */}
               <div className="px-2 py-1.5">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Finance
                 </div>
                 {CATEGORIES.filter((c) => ['crypto', 'stocks', 'economics', 'business', 'crypto-prices', 'commodities'].includes(c.id)).map((cat) => (
@@ -720,7 +905,7 @@ function MarketDiscoveryCardComponent() {
               <DropdownMenuSeparator />
               
               <div className="px-2 py-1.5">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Sports
                 </div>
                 {CATEGORIES.filter((c) => ['sports', 'nfl', 'nba', 'soccer', 'mlb', 'nhl', 'f1'].includes(c.id)).map((cat) => (
@@ -737,7 +922,7 @@ function MarketDiscoveryCardComponent() {
               <DropdownMenuSeparator />
               
               <div className="px-2 py-1.5">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Politics
                 </div>
                 {CATEGORIES.filter((c) => ['politics', 'us-politics', 'elections', 'geopolitics', 'immigration', 'legal'].includes(c.id)).map((cat) => (
@@ -754,7 +939,7 @@ function MarketDiscoveryCardComponent() {
               <DropdownMenuSeparator />
               
               <div className="px-2 py-1.5">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Technology
                 </div>
                 {CATEGORIES.filter((c) => ['tech', 'ai', 'gaming'].includes(c.id)).map((cat) => (
@@ -771,7 +956,7 @@ function MarketDiscoveryCardComponent() {
               <DropdownMenuSeparator />
               
               <div className="px-2 py-1.5">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Entertainment
                 </div>
                 {CATEGORIES.filter((c) => ['entertainment', 'movies', 'music'].includes(c.id)).map((cat) => (
@@ -788,7 +973,7 @@ function MarketDiscoveryCardComponent() {
               <DropdownMenuSeparator />
               
               <div className="px-2 py-1.5">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Science & Health
                 </div>
                 {CATEGORIES.filter((c) => ['health', 'covid', 'climate', 'space', 'weather'].includes(c.id)).map((cat) => (
@@ -805,7 +990,7 @@ function MarketDiscoveryCardComponent() {
               <DropdownMenuSeparator />
               
               <div className="px-2 py-1.5">
-                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                   Current Events
                 </div>
                 {CATEGORIES.filter((c) => ['ukraine', 'middle-east'].includes(c.id)).map((cat) => (
@@ -820,34 +1005,74 @@ function MarketDiscoveryCardComponent() {
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
+          
+          {/* Sort Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs px-2.5 gap-1.5"
+              >
+                <ArrowUpDown className="h-3 w-3" />
+                <span className="hidden sm:inline">
+                  {SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label || 'Sort'}
+                </span>
+                <span className="sm:hidden">Sort</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              {SORT_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.id}
+                  onClick={() => setSortBy(opt.id)}
+                  className={sortBy === opt.id ? 'bg-accent' : ''}
+                >
+                  {opt.label} {sortBy === opt.id && '✓'}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* Status Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs px-2.5 flex-shrink-0"
+              >
+                <span className="mr-1">
+                  {selectedStatus === 'active' ? 'Active' : 'All'}
+                </span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-32">
+              <DropdownMenuItem
+                onClick={() => setSelectedStatus('active')}
+                className={selectedStatus === 'active' ? 'bg-accent' : ''}
+              >
+                Active {selectedStatus === 'active' && '✓'}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setSelectedStatus('all')}
+                className={selectedStatus === 'all' ? 'bg-accent' : ''}
+              >
+                All {selectedStatus === 'all' && '✓'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-
-        {/* Sort and Status */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 items-stretch sm:items-center">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded bg-background flex-1 sm:flex-none min-w-0 touch-manipulation"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                Sort by: {opt.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 border border-border rounded bg-background flex-1 sm:flex-none min-w-0 touch-manipulation"
-          >
-            <option value="active">Status: Active</option>
-            <option value="all">Status: All</option>
-          </select>
-        </div>
+        {searchQuery && groupedMarkets.length === 0 && !isLoading && (
+          <div className="text-xs text-muted-foreground text-center py-1">
+            No results found for "{searchQuery}"
+          </div>
+        )}
       </div>
 
       {/* Market List */}
-      <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-1.5 sm:space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
         {isLoading ? (
           <div className="flex items-center justify-center h-32 sm:h-48">
             <LoadingSpinner size="sm" text="Loading markets..." />
@@ -908,6 +1133,7 @@ function MarketDiscoveryCardComponent() {
               // Check if event is in watchlist
               const eventId = group.eventId;
               const eventInWatchlist = eventId ? isEventInWatchlist(eventId) : false;
+              const isAnyMarketSelected = group.markets.some(m => m.id === selectedMarketId);
 
               // Handler to add all markets in this group to a chart
               const handleAddToChart = () => {
@@ -955,7 +1181,10 @@ function MarketDiscoveryCardComponent() {
                           }
                           setExpandedGroups(newExpanded);
                         }}
-                        className="w-full px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-accent/50 active:bg-accent cursor-pointer transition-colors group cursor-move touch-manipulation"
+                        className={cn(
+                          "w-full px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-accent/50 active:bg-accent cursor-pointer transition-colors group cursor-move touch-manipulation border-b border-border/50",
+                          isAnyMarketSelected && "bg-primary/10 border-l-2 border-l-primary"
+                        )}
                       >
                     <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                       {group.imageUrl && !imageErrors.has(key) && (
@@ -1022,7 +1251,12 @@ function MarketDiscoveryCardComponent() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className={`h-5 w-5 sm:h-6 sm:w-6 p-0 touch-manipulation ${eventInWatchlist ? 'text-green-500' : ''}`}
+                            className={cn(
+                              "h-6 w-6 p-0 touch-manipulation transition-all",
+                              eventInWatchlist 
+                                ? "text-green-500 opacity-100" 
+                                : "opacity-60 hover:opacity-100 hover:text-green-500"
+                            )}
                             onClick={(e) => {
                               e.stopPropagation();
                               e.preventDefault();
@@ -1099,7 +1333,14 @@ function MarketDiscoveryCardComponent() {
                   {/* Grouped Markets */}
                   {isExpanded && (
                     <div>
-                      {group.markets.map((market) => {
+                      {group.markets
+                        .filter((market) => {
+                          // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
+                          const volume = market.volume || 0;
+                          const liquidity = market.liquidity || 0;
+                          return volume > 0 || liquidity > 0;
+                        })
+                        .map((market) => {
                         const probability = (market.outcomePrices?.YES || 0) * 100;
                         const volume = market.volume || 0;
                         const liquidity = market.liquidity || 0;
@@ -1155,6 +1396,8 @@ function MarketDiscoveryCardComponent() {
                           });
                         };
 
+                        const isSelected = market.id === selectedMarketId;
+
                         return (
                           <ContextMenu key={market.id}>
                             <ContextMenuTrigger asChild>
@@ -1175,7 +1418,10 @@ function MarketDiscoveryCardComponent() {
                                     e.currentTarget.style.opacity = '1';
                                   }
                                 }}
-                                className="w-full px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-accent/50 active:bg-accent cursor-move transition-colors"
+                                className={cn(
+                                  "w-full px-2 sm:px-3 pl-6 sm:pl-8 py-1.5 sm:py-2 hover:bg-accent/30 active:bg-accent cursor-move transition-colors border-b border-border/30",
+                                  isSelected && "bg-primary/10 border-l-2 border-l-primary"
+                                )}
                               >
                             <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                               {market.imageUrl && !imageErrors.has(market.id) && (
@@ -1251,7 +1497,12 @@ function MarketDiscoveryCardComponent() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className={`h-5 w-5 sm:h-6 sm:w-6 p-0 touch-manipulation ${isInWatchlist(market.id) ? 'text-green-500' : ''}`}
+                                  className={cn(
+                                    "h-6 w-6 p-0 touch-manipulation transition-all",
+                                    isInWatchlist(market.id) 
+                                      ? "text-green-500 opacity-100" 
+                                      : "opacity-60 hover:opacity-100 hover:text-green-500"
+                                  )}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (isInWatchlist(market.id)) {
@@ -1265,9 +1516,9 @@ function MarketDiscoveryCardComponent() {
                                   title={isInWatchlist(market.id) ? 'Remove from watchlist' : 'Add to watchlist'}
                                 >
                                   {isInWatchlist(market.id) ? (
-                                    <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                    <Check className="h-3.5 w-3.5" />
                                   ) : (
-                                    <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                    <Plus className="h-3.5 w-3.5" />
                                   )}
                                 </Button>
                               </div>
@@ -1442,7 +1693,10 @@ function MarketDiscoveryCardComponent() {
                         e.currentTarget.style.opacity = '1';
                       }
                     }}
-                    className="w-full px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-accent/50 active:bg-accent text-left transition-colors cursor-move touch-manipulation"
+                    className={cn(
+                      "w-full px-2 sm:px-3 py-1.5 sm:py-2 hover:bg-accent/50 active:bg-accent text-left transition-colors cursor-move touch-manipulation border-b border-border/50",
+                      market.id === selectedMarketId && "bg-primary/10 border-l-2 border-l-primary"
+                    )}
                   >
                 <div className="flex items-start justify-between gap-1.5 sm:gap-2">
                   {market.imageUrl && !imageErrors.has(market.id) && (
@@ -1518,7 +1772,12 @@ function MarketDiscoveryCardComponent() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className={`h-5 w-5 sm:h-6 sm:w-6 p-0 touch-manipulation ${isInWatchlist(market.id) ? 'text-green-500' : ''}`}
+                      className={cn(
+                        "h-6 w-6 p-0 touch-manipulation transition-all",
+                        isInWatchlist(market.id) 
+                          ? "text-green-500 opacity-100" 
+                          : "opacity-60 hover:opacity-100 hover:text-green-500"
+                      )}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (isInWatchlist(market.id)) {
@@ -1532,9 +1791,9 @@ function MarketDiscoveryCardComponent() {
                       title={isInWatchlist(market.id) ? 'Remove from watchlist' : 'Add to watchlist'}
                     >
                       {isInWatchlist(market.id) ? (
-                        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                        <Check className="h-3.5 w-3.5" />
                       ) : (
-                        <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                        <Plus className="h-3.5 w-3.5" />
                       )}
                     </Button>
                   </div>

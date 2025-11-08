@@ -56,16 +56,18 @@ export function ErrorFallback({
 
 /**
  * Card error fallback - specific styling for card components
+ * Standardized for consistent error handling across all cards
  */
 export function CardErrorFallback({ error, resetError }: { error: Error; resetError: () => void }) {
   return (
     <div className="h-full flex flex-col items-center justify-center p-4 text-center">
-      <X className="h-6 w-6 text-destructive mb-2" />
-      <p className="text-xs text-muted-foreground mb-3">
-        Failed to load content
+      <X className="h-8 w-8 text-destructive mb-3" />
+      <h3 className="text-xs font-semibold mb-1">Failed to load content</h3>
+      <p className="text-xs text-muted-foreground mb-4">
+        An error occurred while loading this content. Please try again.
       </p>
-      <Button onClick={resetError} size="sm" variant="ghost" className="text-xs">
-        <RefreshCw className="h-3 w-3 mr-1" />
+      <Button onClick={resetError} size="sm" variant="outline" className="text-xs">
+        <RefreshCw className="h-3 w-3 mr-2" />
         Retry
       </Button>
     </div>

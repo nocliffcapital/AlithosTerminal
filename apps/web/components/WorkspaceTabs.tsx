@@ -30,6 +30,7 @@ import {
 export function WorkspaceTabs() {
   const { data: workspaces = [], isLoading } = useWorkspaces();
   const { currentWorkspaceId, setCurrentWorkspace } = useLayoutStore();
+  const layoutStore = useLayoutStore();
   const updateWorkspace = useUpdateWorkspace();
   const createWorkspace = useCreateWorkspace();
   const [hiddenTabs, setHiddenTabs] = useState<Set<string>>(new Set());
@@ -47,6 +48,39 @@ export function WorkspaceTabs() {
   const createInputRef = useRef<HTMLInputElement>(null);
   
   const currentWorkspace = workspaces.find((w: any) => w.id === currentWorkspaceId);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[WorkspaceTabs] State:', {
+      workspacesCount: workspaces.length,
+      currentWorkspaceId,
+      hiddenTabsCount: hiddenTabs.size,
+      hiddenTabs: Array.from(hiddenTabs),
+      isLoading,
+    });
+  }, [workspaces.length, currentWorkspaceId, hiddenTabs.size, isLoading]);
+
+  // Auto-select first workspace if none is selected and workspaces exist
+  useEffect(() => {
+    if (!isLoading && workspaces.length > 0 && !currentWorkspaceId) {
+      // Find first visible workspace (not hidden)
+      const visibleWorkspaces = workspaces.filter((w: any) => !hiddenTabs.has(w.id));
+      if (visibleWorkspaces.length > 0) {
+        const firstVisible = visibleWorkspaces[0];
+        console.log('[WorkspaceTabs] Auto-selecting first visible workspace:', firstVisible.id);
+        setCurrentWorkspace(firstVisible.id).catch((err) => {
+          console.error('[WorkspaceTabs] Failed to auto-select workspace:', err);
+        });
+      } else if (workspaces.length > 0) {
+        // If all are hidden, show the first one and clear hidden state
+        console.log('[WorkspaceTabs] All workspaces hidden, showing first one:', workspaces[0].id);
+        setHiddenTabs(new Set());
+        setCurrentWorkspace(workspaces[0].id).catch((err) => {
+          console.error('[WorkspaceTabs] Failed to auto-select workspace:', err);
+        });
+      }
+    }
+  }, [isLoading, workspaces.length, currentWorkspaceId, hiddenTabs, setCurrentWorkspace]);
 
   // Load tab order from localStorage
   useEffect(() => {
@@ -75,12 +109,33 @@ export function WorkspaceTabs() {
     const stored = localStorage.getItem('hidden-workspace-tabs');
     if (stored) {
       try {
-        setHiddenTabs(new Set(JSON.parse(stored)));
+        const hiddenIds = JSON.parse(stored);
+        if (Array.isArray(hiddenIds)) {
+          setHiddenTabs(new Set(hiddenIds));
+        }
       } catch (error) {
         console.error('Failed to load hidden tabs:', error);
       }
     }
   }, []);
+
+  // Clean up hidden tabs - remove any that don't exist in current workspaces
+  useEffect(() => {
+    if (!isLoading && workspaces.length > 0) {
+      setHiddenTabs((prev) => {
+        const validWorkspaceIds = new Set(workspaces.map((w: any) => w.id));
+        const cleaned = new Set(
+          Array.from(prev).filter((id) => validWorkspaceIds.has(id))
+        );
+        // If all workspaces would be hidden, show at least one
+        if (cleaned.size >= workspaces.length) {
+          console.log('[WorkspaceTabs] All workspaces were hidden, showing first one');
+          return new Set();
+        }
+        return cleaned;
+      });
+    }
+  }, [isLoading, workspaces]);
 
   // Save hidden tabs to localStorage whenever it changes
   useEffect(() => {
@@ -92,7 +147,16 @@ export function WorkspaceTabs() {
   }, [hiddenTabs]);
 
   const handleSelectWorkspace = async (workspaceId: string) => {
-    await setCurrentWorkspace(workspaceId);
+    try {
+      console.log('[WorkspaceTabs] Selecting workspace:', workspaceId);
+      await setCurrentWorkspace(workspaceId);
+      console.log('[WorkspaceTabs] Workspace selected successfully:', workspaceId);
+    } catch (error) {
+      console.error('[WorkspaceTabs] Failed to select workspace:', error);
+      // Still update the current workspace ID even if layout load fails
+      // This ensures the tab appears selected
+      layoutStore.setState({ currentWorkspaceId: workspaceId });
+    }
   };
 
   const handleRemoveTab = (workspaceId: string, e: React.MouseEvent) => {
@@ -223,6 +287,7 @@ export function WorkspaceTabs() {
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, workspaceId: string) => {
     setDraggedTabId(workspaceId);
+    (window as any)._lastDragStart = Date.now();
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/html', workspaceId);
   };
@@ -323,9 +388,13 @@ export function WorkspaceTabs() {
   };
 
   const handleDragEnd = () => {
-    setDraggedTabId(null);
-    setDragOverTabId(null);
-    setInsertPosition(null);
+    // Clear drag state with a small delay to prevent click events from firing
+    setTimeout(() => {
+      setDraggedTabId(null);
+      setDragOverTabId(null);
+      setInsertPosition(null);
+      delete (window as any)._lastDragStart;
+    }, 50);
   };
 
   const handleDoubleClick = (e: React.MouseEvent, workspaceId: string, currentName: string) => {
@@ -487,12 +556,45 @@ export function WorkspaceTabs() {
                         e.preventDefault();
                       }
                     }}
+                    onMouseUp={(e) => {
+                      // Clear draggedTabId if mouse is released (handles incomplete drags)
+                      if (draggedTabId && !e.defaultPrevented) {
+                        // Small delay to allow drag handlers to complete
+                        setTimeout(() => {
+                          if (draggedTabId) {
+                            setDraggedTabId(null);
+                            setDragOverTabId(null);
+                            setInsertPosition(null);
+                          }
+                        }, 100);
+                      }
+                    }}
                     onClick={(e) => {
-                      // Don't select if we just finished dragging or if editing this tab
-                      if (draggedTabId || editingTabId === workspace.id) {
+                      // Don't select if editing this tab
+                      if (editingTabId === workspace.id) {
                         e.preventDefault();
                         return;
                       }
+                      // Only prevent if we're actively dragging (not just stuck)
+                      // Allow click if it's been more than 200ms since drag started
+                      if (draggedTabId) {
+                        // Check if this is a real drag or just a stuck state
+                        // If mouse hasn't moved much, allow the click
+                        const timeSinceDrag = (window as any)._lastDragStart 
+                          ? Date.now() - (window as any)._lastDragStart 
+                          : Infinity;
+                        if (timeSinceDrag < 200) {
+                          e.preventDefault();
+                          return;
+                        }
+                        // Clear stuck draggedTabId - it's been too long, treat as stuck
+                        console.log('[WorkspaceTabs] Clearing stuck draggedTabId, timeSinceDrag:', timeSinceDrag);
+                        setDraggedTabId(null);
+                        setDragOverTabId(null);
+                        setInsertPosition(null);
+                        delete (window as any)._lastDragStart;
+                      }
+                      console.log('[WorkspaceTabs] Clicking workspace tab:', workspace.id);
                       handleSelectWorkspace(workspace.id);
                     }}
                   >

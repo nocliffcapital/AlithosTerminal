@@ -22,9 +22,10 @@ interface MarketSelectorProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect?: (marketId: string) => void;
+  onSelectAll?: (marketIds: string[]) => void; // For selecting all markets in a group (e.g., for charts)
 }
 
-export function MarketSelector({ open, onOpenChange, onSelect }: MarketSelectorProps) {
+export function MarketSelector({ open, onOpenChange, onSelect, onSelectAll }: MarketSelectorProps) {
   const { data: markets = [], isLoading } = useMarkets({ active: true }); // Fetch all markets (no limit)
   const { selectMarket, getPrice, getMarket } = useMarketStore();
   const { marketIds: watchlistIds, getEventIds } = useWatchlistStore();
@@ -176,6 +177,14 @@ export function MarketSelector({ open, onOpenChange, onSelect }: MarketSelectorP
     onSelect?.(marketId);
     onOpenChange(false);
     setSearchQuery('');
+  };
+
+  const handleSelectAll = (marketIds: string[]) => {
+    if (onSelectAll) {
+      onSelectAll(marketIds);
+      onOpenChange(false);
+      setSearchQuery('');
+    }
   };
 
   const toggleGroup = (eventId: string) => {
@@ -358,32 +367,46 @@ export function MarketSelector({ open, onOpenChange, onSelect }: MarketSelectorP
                       const isExpanded = expandedGroups.has(group.eventId);
                       return (
                         <div key={`watchlist-event-${group.eventId}`} className="divide-y divide-border">
-                          <button
-                            onClick={() => toggleGroup(group.eventId)}
-                            className="w-full px-4 py-3 hover:bg-accent/30 transition-colors text-left flex items-center gap-2"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                          <div className="w-full px-4 py-3 hover:bg-accent/30 transition-colors flex items-center gap-2">
+                            <button
+                              onClick={() => toggleGroup(group.eventId)}
+                              className="flex items-center gap-2 flex-1 text-left"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                              {group.imageUrl && !imageErrors.has(`group-${group.eventId}`) && (
+                                <div className="flex-shrink-0 w-8 h-8 overflow-hidden border border-border bg-accent/20 rounded">
+                                  <Image
+                                    src={group.imageUrl}
+                                    alt={group.title}
+                                    width={32}
+                                    height={32}
+                                    className="w-full h-full object-cover"
+                                    onError={() => {
+                                      setImageErrors(prev => new Set([...prev, `group-${group.eventId}`]));
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              <span className="font-medium text-sm">{group.title}</span>
+                              <span className="text-xs text-muted-foreground">({group.markets.length} markets)</span>
+                            </button>
+                            {onSelectAll && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectAll(group.markets.map(m => m.id));
+                                }}
+                                className="text-xs text-primary hover:text-primary/80 font-medium px-2 py-1 hover:bg-accent/50 rounded transition-colors flex-shrink-0"
+                                title="Select all markets in this group"
+                              >
+                                All
+                              </button>
                             )}
-                            {group.imageUrl && !imageErrors.has(`group-${group.eventId}`) && (
-                              <div className="flex-shrink-0 w-8 h-8 overflow-hidden border border-border bg-accent/20 rounded">
-                                <Image
-                                  src={group.imageUrl}
-                                  alt={group.title}
-                                  width={32}
-                                  height={32}
-                                  className="w-full h-full object-cover"
-                                  onError={() => {
-                                    setImageErrors(prev => new Set([...prev, `group-${group.eventId}`]));
-                                  }}
-                                />
-                              </div>
-                            )}
-                            <span className="font-medium text-sm">{group.title}</span>
-                            <span className="text-xs text-muted-foreground">({group.markets.length} markets)</span>
-                          </button>
+                          </div>
                           {isExpanded && (
                             <div>
                               {group.markets.map((market) => renderMarketCard(market))}
@@ -413,32 +436,46 @@ export function MarketSelector({ open, onOpenChange, onSelect }: MarketSelectorP
                         const isExpanded = expandedGroups.has(item.eventId);
                         return (
                           <div key={`group-${item.eventId}`} className="divide-y divide-border">
-                            <button
-                              onClick={() => toggleGroup(item.eventId)}
-                              className="w-full px-4 py-3 hover:bg-accent/30 transition-colors text-left flex items-center gap-2"
-                            >
-                              {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            <div className="w-full px-4 py-3 hover:bg-accent/30 transition-colors flex items-center gap-2">
+                              <button
+                                onClick={() => toggleGroup(item.eventId)}
+                                className="flex items-center gap-2 flex-1 text-left"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                )}
+                                {item.imageUrl && !imageErrors.has(`group-${item.eventId}`) && (
+                                  <div className="flex-shrink-0 w-8 h-8 overflow-hidden border border-border bg-accent/20 rounded">
+                                    <Image
+                                      src={item.imageUrl}
+                                      alt={item.title}
+                                      width={32}
+                                      height={32}
+                                      className="w-full h-full object-cover"
+                                      onError={() => {
+                                        setImageErrors(prev => new Set([...prev, `group-${item.eventId}`]));
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                                <span className="font-medium text-sm">{item.title}</span>
+                                <span className="text-xs text-muted-foreground">({item.group.length} markets)</span>
+                              </button>
+                              {onSelectAll && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectAll(item.group.map(m => m.id));
+                                  }}
+                                  className="text-xs text-primary hover:text-primary/80 font-medium px-2 py-1 hover:bg-accent/50 rounded transition-colors flex-shrink-0"
+                                  title="Select all markets in this group"
+                                >
+                                  All
+                                </button>
                               )}
-                              {item.imageUrl && !imageErrors.has(`group-${item.eventId}`) && (
-                                <div className="flex-shrink-0 w-8 h-8 overflow-hidden border border-border bg-accent/20 rounded">
-                                  <Image
-                                    src={item.imageUrl}
-                                    alt={item.title}
-                                    width={32}
-                                    height={32}
-                                    className="w-full h-full object-cover"
-                                    onError={() => {
-                                      setImageErrors(prev => new Set([...prev, `group-${item.eventId}`]));
-                                    }}
-                                  />
-                                </div>
-                              )}
-                              <span className="font-medium text-sm">{item.title}</span>
-                              <span className="text-xs text-muted-foreground">({item.group.length} markets)</span>
-                            </button>
+                            </div>
                             {isExpanded && (
                               <div>
                                 {item.group.map((market) => renderMarketCard(market))}

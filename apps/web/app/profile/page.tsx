@@ -14,7 +14,6 @@ import { polygon } from 'viem/chains';
 import { getEffectiveAddress } from '@/lib/web3/proxy-wallet';
 import { DepositModal } from '@/components/DepositModal';
 import { WithdrawModal } from '@/components/WithdrawModal';
-import { NotificationPreferences } from '@/components/settings/NotificationPreferences';
 import { useRouter } from 'next/navigation';
 
 // Minimal ERC20 ABI (just balanceOf function)
@@ -261,13 +260,6 @@ export default function ProfilePage() {
             <div className="text-xs text-muted-foreground mb-1.5">Markets Traded</div>
             <div className="text-base sm:text-lg font-mono font-semibold">{accountMetrics.marketsTraded}</div>
           </div>
-        </div>
-      </div>
-
-      {/* Notification Preferences */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
-        <div className="bg-card border border-border shadow-card p-4 sm:p-6">
-          <NotificationPreferences />
         </div>
       </div>
 

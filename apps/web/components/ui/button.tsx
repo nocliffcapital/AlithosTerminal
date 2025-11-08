@@ -14,6 +14,8 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground active:bg-accent/80',
         link: 'text-primary underline-offset-4 hover:underline hover:text-primary/80',
         subtle: 'bg-accent/50 text-foreground hover:bg-accent hover:text-accent-foreground active:bg-accent/90',
+        buy: 'bg-green-600 text-white hover:bg-green-600/90 hover:shadow-lg hover:shadow-green-600/20 active:bg-green-600/95 shadow-md border border-green-600',
+        sell: 'bg-red-600 text-white hover:bg-red-600/90 hover:shadow-lg hover:shadow-red-600/20 active:bg-red-600/95 shadow-md border border-red-600',
       },
       size: {
         default: 'h-10 px-4 py-2 text-sm',

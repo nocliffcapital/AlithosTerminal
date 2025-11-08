@@ -208,10 +208,36 @@ export interface HistoricalPrice {
 export function convertHistoricalPricesToLightweight(
   prices: HistoricalPrice[]
 ): LightweightChartDataPoint[] {
-  return prices.map((price) => ({
-    time: timestampToUnixSeconds(price.timestamp),
-    value: price.probability ?? price.price * 100, // Convert to percentage
-  }));
+  return prices
+    .map((price) => {
+      // Ensure we have a valid timestamp
+      if (!price.timestamp || isNaN(price.timestamp)) {
+        return null;
+      }
+      
+      // Calculate probability value - prefer probability field, fallback to price * 100
+      let value: number;
+      if (price.probability != null && !isNaN(price.probability) && isFinite(price.probability)) {
+        // Use probability field directly (should already be 0-100)
+        value = price.probability;
+      } else if (price.price != null && !isNaN(price.price) && isFinite(price.price)) {
+        // Convert price from decimal (0-1) to percentage (0-100)
+        // Price should always be in 0-1 format from the API
+        value = price.price * 100;
+      } else {
+        return null; // Skip invalid data points
+      }
+      
+      // Clamp value to 0-100 range (probabilities should be percentages)
+      // This ensures we never show values outside the valid probability range
+      value = Math.max(0, Math.min(100, value));
+      
+      return {
+        time: timestampToUnixSeconds(price.timestamp),
+        value,
+      };
+    })
+    .filter((point): point is LightweightChartDataPoint => point !== null);
 }
 
 /**

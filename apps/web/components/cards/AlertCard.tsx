@@ -210,7 +210,7 @@ function AlertCardComponent() {
             size="sm"
             variant="outline"
             onClick={() => setShowHistory(!showHistory)}
-            className="text-xs h-6"
+            className="text-xs"
           >
             <History className="h-3 w-3 mr-1" />
             History
@@ -219,7 +219,7 @@ function AlertCardComponent() {
             size="sm"
             variant="outline"
             onClick={() => setShowTemplates(true)}
-            className="text-xs h-6"
+            className="text-xs"
           >
             <Sparkles className="h-3 w-3 mr-1" />
             Templates
@@ -228,7 +228,7 @@ function AlertCardComponent() {
             size="sm"
             variant="outline"
             onClick={() => setShowCreate(!showCreate)}
-            className="text-xs h-6"
+            className="text-xs"
           >
             <Plus className="h-3 w-3 mr-1" />
             New
@@ -248,14 +248,14 @@ function AlertCardComponent() {
 
           {/* Market Selection */}
           <div>
-            <Label className="text-[10px]">Market (optional)</Label>
+            <Label>Market (optional)</Label>
             <div className="flex items-center gap-2 mt-1">
               <Input
                 placeholder="Select market (optional for global alerts)"
                 value={newAlert.marketId ? getMarket(newAlert.marketId)?.question || newAlert.marketId : ''}
                 readOnly
                 onClick={() => setShowMarketSelector(true)}
-                className="flex-1 text-xs h-7 cursor-pointer"
+                className="flex-1 text-xs cursor-pointer"
               />
               {newAlert.marketId && (
                 <button
@@ -270,7 +270,7 @@ function AlertCardComponent() {
                 size="sm"
                 variant="outline"
                 onClick={() => setShowMarketSelector(true)}
-                className="text-xs h-7"
+                className="text-xs"
               >
                 Select
               </Button>
@@ -278,7 +278,7 @@ function AlertCardComponent() {
           </div>
 
           <div>
-            <Label className="text-[10px]">Conditions (AND)</Label>
+            <Label>Conditions (AND)</Label>
             {newAlert.conditions?.map((condition, index) => (
               <div key={index} className="flex items-center gap-1 mt-1">
                 <select
@@ -303,7 +303,7 @@ function AlertCardComponent() {
                     updated[index] = { ...condition, operator: e.target.value as any };
                     setNewAlert({ ...newAlert, conditions: updated });
                   }}
-                  className="w-16 text-xs h-6 px-1 border rounded"
+                  className="w-16 text-xs px-1 border rounded"
                 >
                   <option value="lt">&lt;</option>
                   <option value="gt">&gt;</option>
@@ -318,7 +318,7 @@ function AlertCardComponent() {
                     updated[index] = { ...condition, value: parseFloat(e.target.value) || 0 };
                     setNewAlert({ ...newAlert, conditions: updated });
                   }}
-                  className="w-20 text-xs h-6"
+                  className="w-20 text-xs"
                 />
                 <button
                   onClick={() => removeCondition(index)}
@@ -340,7 +340,7 @@ function AlertCardComponent() {
           </div>
 
           <div>
-            <Label className="text-[10px]">Actions</Label>
+            <Label>Actions</Label>
             {newAlert.actions?.map((action, index) => (
               <div key={index} className="flex items-center gap-1 mt-1">
                 <select
@@ -407,7 +407,7 @@ function AlertCardComponent() {
               size="sm"
               variant="outline"
               onClick={() => setShowCreate(false)}
-              className="text-xs h-6"
+              className="text-xs"
             >
               Cancel
             </Button>

@@ -1,6 +1,7 @@
 // Alert system for multi-signal alerts and automation
 import { sendWebhook } from '@/lib/notifications/webhook-client';
 import { sendEmail } from '@/lib/notifications/email-client';
+import { sendTelegramMessage } from '@/lib/notifications/telegram-client';
 
 export type AlertCondition = {
   type: 'price' | 'volume' | 'depth' | 'flow' | 'spread';
@@ -225,7 +226,7 @@ class AlertSystem {
 
   private async executeActions(alert: Alert): Promise<void> {
     // Fetch user preferences and email (API uses auth to get current user)
-    let preferences: { browser: boolean; email: boolean; webhook: boolean; webhookUrl?: string } | null = null;
+    let preferences: { browser: boolean; email: boolean; webhook: boolean; webhookUrl?: string; telegram?: boolean; telegramUsername?: string } | null = null;
     let userEmail: string | null = null;
     
     try {
@@ -266,6 +267,18 @@ class AlertSystem {
               html: `<p>${message}</p><p>Alert: ${alert.name}</p><p>Market: ${alert.marketId || 'Global'}</p>`,
             }).catch((error) => {
               console.error('[AlertSystem] Failed to send email notification:', error);
+            });
+          }
+
+          // Send Telegram notification if enabled in preferences and user has username
+          if (preferences?.telegram && preferences?.telegramUsername) {
+            const telegramMessage = `🚨 <b>Alert Triggered: ${alert.name}</b>\n\n${message}\n\n<i>Market:</i> ${alert.marketId || 'Global'}`;
+            await sendTelegramMessage({
+              username: preferences.telegramUsername,
+              message: telegramMessage,
+              parseMode: 'HTML',
+            }).catch((error) => {
+              console.error('[AlertSystem] Failed to send Telegram notification:', error);
             });
           }
           break;

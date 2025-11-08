@@ -57,6 +57,33 @@ See [POLYMARKET_API_SETUP.md](./POLYMARKET_API_SETUP.md) for detailed setup inst
   ```
   Get API key from [Moralis](https://moralis.io/)
 
+#### AI Market Research
+- **Grok API** (xAI) - For AI-powered market research:
+  ```env
+  GROK_API_KEY="your-grok-api-key"
+  ```
+  Get API key from [xAI Console](https://console.x.ai)
+
+- **OpenAI API** - For multi-agent analysis:
+  ```env
+  OPENAI_API_KEY="your-openai-api-key"
+  ```
+  Get API key from [OpenAI Platform](https://platform.openai.com)
+
+#### Telegram Notifications
+- **Telegram Bot** - For Telegram notifications:
+  ```env
+  TELEGRAM_BOT_TOKEN="your-telegram-bot-token"
+  ```
+  To set up a Telegram bot:
+  1. Open Telegram and search for [@BotFather](https://t.me/botfather)
+  2. Start a conversation with BotFather
+  3. Send `/newbot` command
+  4. Follow the prompts to create your bot and get the bot token
+  5. Add the token to your `.env.local` file
+  6. Users can then provide their Telegram username in Settings → Notification Preferences
+  7. **Important**: Users must start a conversation with the bot (e.g., @alithos_bot) before receiving notifications
+
 ## Step 3: Set Up PostgreSQL Database
 
 1. Create a PostgreSQL database:

@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { WorkspaceGrid } from '@/components/layout/WorkspaceGrid';
 import { Card } from '@/components/layout/Card';
-import { CommandPalette } from '@/components/CommandPalette';
+import { PresetsDialog } from '@/components/PresetsDialog';
+import { usePresets } from '@/lib/hooks/usePresets';
 import { HotkeyManager } from '@/components/HotkeyManager';
 import { AddCardButton } from '@/components/AddCardButton';
 import { WorkspaceSelector } from '@/components/WorkspaceSelector';
 import { WorkspaceTabs } from '@/components/WorkspaceTabs';
 import { Footer } from '@/components/Footer';
 import { BalanceBar } from '@/components/BalanceBar';
+import { LinkSelectionToolbar } from '@/components/cards/LinkManager';
 import { DepositModal } from '@/components/DepositModal';
 import { WithdrawModal } from '@/components/WithdrawModal';
 import { WebSocketConnectionIndicator } from '@/components/WebSocketConnectionIndicator';
@@ -22,6 +24,7 @@ import { useWorkspaces, useCreateWorkspace } from '@/lib/hooks/useWorkspace';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useClobAuth } from '@/lib/hooks/useClobAuth';
 import { useWebSocketConnection, useMarkets } from '@/lib/hooks/usePolymarketData';
+import { useRealtimeConnection } from '@/lib/hooks/useRealtimeConnection';
 import { useMarketStore } from '@/stores/market-store';
 import { User, LogOut, Settings, ArrowDownCircle, ArrowUpCircle, TrendingUp, BarChart3, Zap, Shield, Activity, LineChart, Loader2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,11 +43,12 @@ export default function Home() {
   const router = useRouter();
   // Initialize CLOB auth - this will automatically prompt for signature on wallet connect
   useClobAuth();
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [presetsDialogOpen, setPresetsDialogOpen] = useState(false);
+  const { presets, savePresets } = usePresets();
   const [initTimeout, setInitTimeout] = useState(false);
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
-  const { currentLayout, setCurrentWorkspace, setUserId, currentWorkspaceId } = useLayoutStore();
+  const { currentLayout, setCurrentWorkspace, setUserId, currentWorkspaceId, linkSelectionMode } = useLayoutStore();
 
   // Set userId in layout store when user is available
   useEffect(() => {
@@ -58,6 +62,9 @@ export default function Home() {
   const { data: marketsData } = useMarkets({ active: true, limit: 100 });
   // WebSocket connection - automatically enabled when API key is configured
   useWebSocketConnection();
+  // Real-time data client connection for comments and enhanced data streams
+  // TEMPORARILY DISABLED - investigating error loop
+  // useRealtimeConnection();
 
   // Add timeout for Privy initialization
   useEffect(() => {
@@ -359,7 +366,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background">
       <HotkeyManager />
-      <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
       
       <div className="h-screen flex flex-col pb-8">
         {/* Network Validation Banner */}
@@ -370,8 +376,13 @@ export default function Home() {
           <RiskWarning variant="banner" dismissible={true} />
         )}
         
-        {/* Header */}
-        <header className="border-b border-border bg-background/95 backdrop-blur-sm px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky top-0 z-30">
+        {/* Link Selection Toolbar (replaces navbar when active) */}
+        {linkSelectionMode ? (
+          <LinkSelectionToolbar />
+        ) : (
+          <>
+            {/* Header */}
+            <header className="border-b border-border bg-background/95 backdrop-blur-sm px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky top-0 z-30">
           <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               <img 
@@ -411,12 +422,13 @@ export default function Home() {
               <span className="text-muted-foreground">Withdraw</span>
             </button>
             <button
-              onClick={() => setCommandPaletteOpen(true)}
-              className="px-3 py-1.5 text-xs border border-border bg-card hover:bg-accent hover:border-border/80 transition-all duration-200 font-medium h-8 shadow-sm hover:shadow-md"
-              title="Open command palette"
-              aria-label="Open command palette"
+              onClick={() => setPresetsDialogOpen(true)}
+              className="px-3 py-1.5 text-xs border border-border bg-card hover:bg-accent hover:border-border/80 transition-all duration-200 font-medium h-8 shadow-sm hover:shadow-md flex items-center gap-1.5"
+              title="Edit presets"
+              aria-label="Edit presets"
             >
-              <span className="text-muted-foreground">⌘</span>K
+              <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">Presets</span>
             </button>
             {!authenticated && (
               <Button
@@ -455,9 +467,17 @@ export default function Home() {
                   onClick={() => router.push('/profile')}
                   className="cursor-pointer py-2.5 px-3 text-sm"
                 >
-                  <Settings className="h-4 w-4 mr-2.5" />
+                  <User className="h-4 w-4 mr-2.5" />
                   <span>Profile</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => router.push('/settings')}
+                  className="cursor-pointer py-2.5 px-3 text-sm"
+                >
+                  <Settings className="h-4 w-4 mr-2.5" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => logout()}
                   className="cursor-pointer text-destructive focus:text-destructive py-2.5 px-3 text-sm"
@@ -469,9 +489,11 @@ export default function Home() {
             </DropdownMenu>
           </div>
         </header>
+          </>
+        )}
 
-        {/* Workspace Tabs */}
-        <WorkspaceTabs />
+        {/* Workspace Tabs (hidden when selection mode is active) */}
+        {!linkSelectionMode && <WorkspaceTabs />}
 
         {/* Workspace */}
         <div className="flex-1 overflow-hidden">
@@ -480,16 +502,25 @@ export default function Home() {
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
               <div className="text-muted-foreground text-sm">Loading workspaces...</div>
             </div>
-          ) : currentLayout ? (
-            <>
-              <WorkspaceGrid />
-              {/* Render maximized cards outside the grid, at page level for fullscreen */}
-              {currentLayout.cards
-                .filter((card) => card.isMaximized)
-                .map((card) => (
-                  <Card key={card.id} card={card} />
-                ))}
-            </>
+          ) : currentWorkspaceId ? (
+            currentLayout ? (
+              <>
+                <WorkspaceGrid />
+                {/* Render maximized cards outside the grid, at page level for fullscreen */}
+                {currentLayout.cards
+                  .filter((card) => card.isMaximized)
+                  .map((card) => (
+                    <Card key={card.id} card={card} />
+                  ))}
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+                  <p className="text-muted-foreground">Loading workspace...</p>
+                </div>
+              </div>
+            )
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
@@ -523,6 +554,13 @@ export default function Home() {
       {/* Modals */}
       <DepositModal open={depositModalOpen} onOpenChange={setDepositModalOpen} />
       <WithdrawModal open={withdrawModalOpen} onOpenChange={setWithdrawModalOpen} />
+      <PresetsDialog
+        open={presetsDialogOpen}
+        onOpenChange={setPresetsDialogOpen}
+        buyPreset={presets.buyPreset}
+        sellPreset={presets.sellPreset}
+        onSave={savePresets}
+      />
     </main>
   );
 }

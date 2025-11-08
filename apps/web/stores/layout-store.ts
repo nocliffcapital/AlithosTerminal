@@ -16,7 +16,6 @@ export type CardType =
   | 'chart'
   | 'tradingview-chart'
   | 'correlation-matrix'
-  | 'alerts'
   | 'market-discovery'
   | 'market-info'
   | 'market-research'
@@ -27,10 +26,16 @@ export type CardType =
   | 'team-management'
   | 'journal'
   | 'comments'
-  | 'theme-editor'
   | 'kelly-calculator'
   | 'position-sizing'
-  | 'price-converter';
+  | 'price-converter'
+  | 'market-trade';
+
+export interface CardTab {
+  id: string;
+  label?: string; // Optional label, defaults to market question or card type
+  props: Record<string, unknown>;
+}
 
 export interface CardConfig {
   id: string;
@@ -39,6 +44,30 @@ export interface CardConfig {
   props?: Record<string, unknown>;
   isMinimized?: boolean;
   isMaximized?: boolean;
+  tabs?: CardTab[]; // Array of tabs for this card
+  activeTabId?: string; // ID of the currently active tab
+  linkGroupId?: string; // ID of the link group this card belongs to (optional)
+}
+
+// Color palette for link groups - distinct colors that work well in dark mode
+export const LINK_GROUP_COLORS = [
+  '#3b82f6', // Blue
+  '#10b981', // Green
+  '#f59e0b', // Amber
+  '#ef4444', // Red
+  '#8b5cf6', // Purple
+  '#ec4899', // Pink
+  '#06b6d4', // Cyan
+  '#84cc16', // Lime
+  '#f97316', // Orange
+  '#6366f1', // Indigo
+] as const;
+
+export interface LinkGroup {
+  id: string;
+  cardIds: string[]; // Array of card IDs that are linked together
+  name?: string; // Optional name for the link group
+  color: string; // Color for visual identification
 }
 
 export interface WorkspaceLayout {
@@ -56,6 +85,7 @@ interface LayoutState {
   currentLayout: WorkspaceLayout | null;
   _pendingFetches: Map<string, Promise<WorkspaceLayout | null>>; // Deduplicate simultaneous fetches
   favouriteCardTypes: CardType[]; // User's favourite card types
+  linkGroups: Record<string, LinkGroup>; // Link groups for the current workspace
   setCurrentWorkspace: (id: string) => Promise<void>;
   setUserId: (userId: string) => void;
   updateLayout: (layout: Layouts) => void;
@@ -66,11 +96,33 @@ interface LayoutState {
   maximizeCard: (cardId: string) => void;
   restoreCard: (cardId: string) => void;
   saveLayout: () => Promise<void>;
+  _saveLayoutIfChanged: () => Promise<void>; // Helper to save only if changed
   loadLayout: (id: string) => Promise<void>;
   hasLayoutChanged: (layout: WorkspaceLayout) => Promise<boolean>;
-  toggleFavouriteCardType: (type: CardType) => void;
+  toggleFavouriteCardType: (type: CardType) => boolean;
   isFavouriteCardType: (type: CardType) => boolean;
   loadFavouriteCardTypes: () => void;
+  // Tab management
+  addTab: (cardId: string, tab: CardTab) => void;
+  removeTab: (cardId: string, tabId: string) => void;
+  switchTab: (cardId: string, tabId: string) => void;
+  moveTab: (sourceCardId: string, sourceTabId: string, targetCardId: string, targetIndex?: number) => void;
+  updateTabProps: (cardId: string, tabId: string, props: Record<string, unknown>) => void;
+  // Link management
+  createLinkGroup: (cardIds: string[], name?: string, color?: string) => string; // Returns link group ID
+  addCardToLinkGroup: (cardId: string, linkGroupId: string) => void;
+  removeCardFromLinkGroup: (cardId: string) => void;
+  removeLinkGroup: (linkGroupId: string) => void;
+  getLinkGroup: (linkGroupId: string) => LinkGroup | undefined;
+  getCardLinkGroup: (cardId: string) => LinkGroup | undefined;
+  getLinkedCards: (cardId: string) => string[]; // Returns all card IDs linked to this card
+  // Link selection mode
+  linkSelectionMode: boolean;
+  selectedCardIdsForLinking: Set<string>;
+  startLinkSelection: (initialCardId: string) => void;
+  toggleCardSelection: (cardId: string) => void;
+  clearLinkSelection: () => void;
+  confirmLinkSelection: (name?: string, color?: string) => string | null; // Returns link group ID or null
 }
 
 const defaultCardLayout = (index: number): Layout => ({
@@ -115,6 +167,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   currentLayout: null,
   _pendingFetches: new Map(),
   favouriteCardTypes: loadFavouritesFromStorage(),
+  linkGroups: {},
+  linkSelectionMode: false,
+  selectedCardIdsForLinking: new Set<string>(),
 
   setUserId: (userId: string) => {
     set({ userId });
@@ -130,22 +185,17 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       return;
     }
     
-    // Save current workspace layout before switching (only if it has changed)
+    // Save current workspace layout before switching (non-blocking, only if it has changed)
     if (currentWorkspaceId && currentLayout && currentLayout.cards.length > 0) {
-      try {
-        // Only save if layout has actually changed
-        const hasChanged = await get().hasLayoutChanged(currentLayout);
-        if (hasChanged) {
-          await get().saveLayout();
-        }
-      } catch (error) {
-        console.error('Failed to save layout before switching:', error);
-      }
+      // Don't await - let save run in background without blocking workspace switch
+      get()._saveLayoutIfChanged().catch(() => {
+        // Silent fail - we'll save on next switch or unmount
+      });
     }
     
-    // Check if layout is already cached in memory and recent (less than 30 seconds old)
+    // Check if layout is already cached in memory and recent (less than 5 minutes old)
     let layout = workspaces[id];
-    const CACHE_TTL = 30000; // 30 seconds
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes (increased from 30 seconds)
     
     if (layout && layout._lastLoaded && (Date.now() - layout._lastLoaded < CACHE_TTL)) {
       // Use cached version - skip DB fetch
@@ -187,13 +237,16 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
               id: savedLayout.id,
               name: savedLayout.name || 'Default Layout',
               // Ensure cards have proper layout structure with saved positions
-              cards: (layoutConfig.cards || []).map((card: CardConfig) => ({
-                ...card,
-                layout: {
-                  ...card.layout,
-                  i: card.id, // Ensure 'i' matches card id
-                },
-              })),
+              // Filter out removed cards (alerts and theme-editor) that have been moved to Settings
+              cards: (layoutConfig.cards || [])
+                .filter((card: CardConfig) => (card.type as string) !== 'alerts' && (card.type as string) !== 'theme-editor')
+                .map((card: CardConfig) => ({
+                  ...card,
+                  layout: {
+                    ...card.layout,
+                    i: card.id, // Ensure 'i' matches card id
+                  },
+                })),
               _lastLoaded: Date.now(),
             };
             
@@ -219,10 +272,15 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     get()._pendingFetches.set(id, fetchPromise);
     
     // Wait for fetch to complete
-    layout = await fetchPromise;
+    const fetchedLayout = await fetchPromise;
     
     // Clean up pending fetch
     get()._pendingFetches.delete(id);
+    
+    // If layout was fetched, use it
+    if (fetchedLayout) {
+      layout = fetchedLayout;
+    }
     
     // If layout exists in memory but not from DB, use memory version
     if (!layout) {
@@ -231,6 +289,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     
     // If no layout exists after trying to load, create a default one with a few starter cards
     if (!layout) {
+      console.log('[setCurrentWorkspace] No layout found, creating default layout for workspace:', id);
       const defaultCards: CardConfig[] = [
         {
           id: 'watchlist-1',
@@ -297,9 +356,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       layout._lastLoaded = Date.now();
     }
     
+    // Always set the workspace, even if layout is null (will show empty workspace)
+    // This ensures the workspace is selected and the UI updates
+    console.log('[setCurrentWorkspace] Setting workspace:', id, 'layout:', layout ? 'exists' : 'null');
     set({
       currentWorkspaceId: id,
-      currentLayout: layout,
+      currentLayout: layout || null,
     });
   },
 
@@ -416,14 +478,10 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       },
     });
     
-    // Save layout (debounced to prevent excessive saves)
-    const saveTimeout = (get() as any).__saveTimeout;
-    if (saveTimeout) clearTimeout(saveTimeout);
-    (get() as any).__saveTimeout = setTimeout(() => {
-      get().saveLayout().catch((err) => {
-        console.error('Failed to auto-save layout:', err);
-      });
-    }, 2500); // Debounce saves to 2.5 seconds (increased from 1s)
+    // Save layout immediately (only if changed)
+    get()._saveLayoutIfChanged().catch((err) => {
+      console.error('Failed to auto-save layout:', err);
+    });
   },
 
   removeCard: (cardId) => {
@@ -437,25 +495,114 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       },
     });
     
-    // Auto-save after removing card (debounced)
-    setTimeout(() => {
-      get().saveLayout().catch((err) => {
-        console.error('Failed to auto-save layout:', err);
-      });
-    }, 2500); // Increased to 2.5 seconds
+    // Auto-save after removing card (immediate, only if changed)
+    get()._saveLayoutIfChanged().catch((err) => {
+      console.error('Failed to auto-save layout:', err);
+    });
   },
 
   updateCardProps: (cardId, props) => {
     const currentLayout = get().currentLayout;
     if (!currentLayout) return;
 
+    // Find the card to determine its type
+    const card = currentLayout.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    // For chart cards, ensure marketId and marketIds are synchronized
+    // If marketIds is being set, clear marketId (chart cards use marketIds)
+    // If marketId is being set and it's a chart card, convert to marketIds
+    const normalizedProps = { ...props };
+    if (card.type === 'chart') {
+      if (normalizedProps.marketIds !== undefined) {
+        // Chart card: use marketIds, clear marketId
+        normalizedProps.marketId = undefined;
+      } else if (normalizedProps.marketId !== undefined) {
+        // Chart card: convert marketId to marketIds array
+        normalizedProps.marketIds = normalizedProps.marketId ? [normalizedProps.marketId] : [];
+        normalizedProps.marketId = undefined;
+      }
+    } else {
+      // Non-chart cards: use marketId, clear marketIds
+      if (normalizedProps.marketId !== undefined) {
+        normalizedProps.marketIds = undefined;
+      }
+    }
+
+    // Update the card's props
+    const updatedCards = currentLayout.cards.map((c) => {
+      if (c.id === cardId) {
+        const newProps = { ...c.props, ...normalizedProps };
+        // Remove undefined values to clean up props
+        Object.keys(newProps).forEach(key => {
+          if (newProps[key] === undefined) {
+            delete newProps[key];
+          }
+        });
+        return { ...c, props: newProps };
+      }
+      return c;
+    });
+
+    // Check if this card is in a link group and if marketId is being updated
+    const updatedCard = updatedCards.find(c => c.id === cardId);
+    const linkGroup = updatedCard?.linkGroupId ? get().linkGroups[updatedCard.linkGroupId] : undefined;
+    
+    // If marketId or marketIds is being updated and card is in a link group, update all linked cards
+    if (linkGroup && (normalizedProps.marketId !== undefined || normalizedProps.marketIds !== undefined)) {
+      const linkedCardIds = linkGroup.cardIds.filter(id => id !== cardId);
+      linkedCardIds.forEach(linkedCardId => {
+        const linkedCardIndex = updatedCards.findIndex(c => c.id === linkedCardId);
+        if (linkedCardIndex >= 0) {
+          const linkedCard = updatedCards[linkedCardIndex];
+          const linkedCardProps = { ...linkedCard.props };
+          
+          // Sync the market selection to linked cards based on their type
+          if (linkedCard.type === 'chart') {
+            // Chart cards use marketIds
+            if (normalizedProps.marketIds !== undefined) {
+              linkedCardProps.marketIds = normalizedProps.marketIds;
+              linkedCardProps.marketId = undefined;
+            } else if (normalizedProps.marketId !== undefined) {
+              linkedCardProps.marketIds = normalizedProps.marketId ? [normalizedProps.marketId] : [];
+              linkedCardProps.marketId = undefined;
+            }
+          } else {
+            // Other cards use marketId
+            if (normalizedProps.marketId !== undefined) {
+              linkedCardProps.marketId = normalizedProps.marketId;
+              linkedCardProps.marketIds = undefined;
+            } else if (normalizedProps.marketIds !== undefined && Array.isArray(normalizedProps.marketIds) && normalizedProps.marketIds.length > 0) {
+              linkedCardProps.marketId = normalizedProps.marketIds[0] as string;
+              linkedCardProps.marketIds = undefined;
+            }
+          }
+          
+          // Remove undefined values
+          Object.keys(linkedCardProps).forEach(key => {
+            if (linkedCardProps[key] === undefined) {
+              delete linkedCardProps[key];
+            }
+          });
+          
+          updatedCards[linkedCardIndex] = {
+            ...linkedCard,
+            props: linkedCardProps,
+          };
+        }
+      });
+    }
+
     set({
       currentLayout: {
         ...currentLayout,
-        cards: currentLayout.cards.map((c) =>
-          c.id === cardId ? { ...c, props: { ...c.props, ...props } } : c
-        ),
+        cards: updatedCards,
       },
+    });
+    
+    // Auto-save after updating props (immediate, only if changed)
+    get()._saveLayoutIfChanged().catch((err) => {
+      console.error('Failed to auto-save layout:', err);
     });
   },
 
@@ -525,6 +672,33 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     
     // Compare with last saved version
     return serialized !== currentSaved;
+  },
+
+  // Helper function to save layout only if it has changed
+  _saveLayoutIfChanged: async () => {
+    const { currentLayout, currentWorkspaceId, userId } = get();
+    if (!currentLayout || !currentWorkspaceId) {
+      return; // Silent return - no need to warn
+    }
+
+    // Check if layout has actually changed before saving
+    const hasChanged = await get().hasLayoutChanged(currentLayout);
+    if (!hasChanged) {
+      // Layout hasn't changed, skip save
+      return;
+    }
+
+    // Check for pending save to prevent duplicate simultaneous saves
+    const pendingSaveKey = `${currentWorkspaceId}-save`;
+    const pendingSave = (get() as any)._pendingSaves?.get(pendingSaveKey);
+    if (pendingSave) {
+      // Wait for existing save to complete
+      await pendingSave;
+      return;
+    }
+
+    // Call the actual save function
+    await get().saveLayout();
   },
 
   saveLayout: async () => {
@@ -655,6 +829,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     
     set({ favouriteCardTypes: newFavourites });
     saveFavouritesToStorage(newFavourites);
+    return !isFavourite; // Return true if added, false if removed
   },
 
   isFavouriteCardType: (type: CardType) => {
@@ -664,6 +839,546 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   loadFavouriteCardTypes: () => {
     const favourites = loadFavouritesFromStorage();
     set({ favouriteCardTypes: favourites });
+  },
+
+  // Tab management functions
+  addTab: (cardId, tab) => {
+    const currentLayout = get().currentLayout;
+    const currentWorkspaceId = get().currentWorkspaceId;
+    
+    if (!currentLayout) return;
+
+    const updatedCards = currentLayout.cards.map(card => {
+      if (card.id === cardId) {
+        const existingTabs = card.tabs || [];
+        // If this is the first tab, convert current props to a tab
+        if (existingTabs.length === 0 && card.props) {
+          const firstTab: CardTab = {
+            id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            props: { ...card.props },
+          };
+          return {
+            ...card,
+            tabs: [firstTab, tab],
+            activeTabId: tab.id,
+            props: undefined, // Clear props since we're using tabs now
+          };
+        }
+        return {
+          ...card,
+          tabs: [...existingTabs, tab],
+          activeTabId: tab.id,
+        };
+      }
+      return card;
+    });
+
+    const updatedLayout = {
+      ...currentLayout,
+      cards: updatedCards,
+    };
+
+    set({
+      currentLayout: updatedLayout,
+      workspaces: {
+        ...get().workspaces,
+        ...(currentWorkspaceId && {
+          [currentWorkspaceId]: updatedLayout,
+        }),
+      },
+    });
+    
+    // Auto-save after adding tab (immediate, only if changed)
+    get()._saveLayoutIfChanged().catch((err) => {
+      console.error('Failed to auto-save layout:', err);
+    });
+  },
+
+  removeTab: (cardId, tabId) => {
+    const currentLayout = get().currentLayout;
+    const currentWorkspaceId = get().currentWorkspaceId;
+    
+    if (!currentLayout) return;
+
+    const updatedCards = currentLayout.cards.map(card => {
+      if (card.id === cardId) {
+        const existingTabs = card.tabs || [];
+        const filteredTabs = existingTabs.filter(tab => tab.id !== tabId);
+        
+        // If no tabs left, convert back to props
+        if (filteredTabs.length === 0) {
+          return {
+            ...card,
+            tabs: undefined,
+            activeTabId: undefined,
+            props: {},
+          };
+        }
+        
+        // If removing active tab, switch to first remaining tab
+        const newActiveTabId = card.activeTabId === tabId 
+          ? filteredTabs[0]?.id 
+          : card.activeTabId;
+        
+        return {
+          ...card,
+          tabs: filteredTabs,
+          activeTabId: newActiveTabId,
+        };
+      }
+      return card;
+    });
+
+    const updatedLayout = {
+      ...currentLayout,
+      cards: updatedCards,
+    };
+
+    set({
+      currentLayout: updatedLayout,
+      workspaces: {
+        ...get().workspaces,
+        ...(currentWorkspaceId && {
+          [currentWorkspaceId]: updatedLayout,
+        }),
+      },
+    });
+    
+    // Auto-save after removing tab (immediate, only if changed)
+    get()._saveLayoutIfChanged().catch((err) => {
+      console.error('Failed to auto-save layout:', err);
+    });
+  },
+
+  switchTab: (cardId, tabId) => {
+    const currentLayout = get().currentLayout;
+    const currentWorkspaceId = get().currentWorkspaceId;
+    
+    if (!currentLayout) return;
+
+    const updatedCards = currentLayout.cards.map(card => {
+      if (card.id === cardId) {
+        return {
+          ...card,
+          activeTabId: tabId,
+        };
+      }
+      return card;
+    });
+
+    const updatedLayout = {
+      ...currentLayout,
+      cards: updatedCards,
+    };
+
+    set({
+      currentLayout: updatedLayout,
+      workspaces: {
+        ...get().workspaces,
+        ...(currentWorkspaceId && {
+          [currentWorkspaceId]: updatedLayout,
+        }),
+      },
+    });
+    
+    // Auto-save after switching tab (immediate, only if changed)
+    get()._saveLayoutIfChanged().catch((err) => {
+      console.error('Failed to auto-save layout:', err);
+    });
+  },
+
+  moveTab: (sourceCardId, sourceTabId, targetCardId, targetIndex) => {
+    const currentLayout = get().currentLayout;
+    const currentWorkspaceId = get().currentWorkspaceId;
+    
+    if (!currentLayout) return;
+
+    let sourceTab: CardTab | null = null;
+    let sourceCard: CardConfig | null = null;
+
+    // Find and remove tab from source card
+    const cardsAfterRemove = currentLayout.cards.map(card => {
+      if (card.id === sourceCardId) {
+        const existingTabs = card.tabs || [];
+        const tabIndex = existingTabs.findIndex(tab => tab.id === sourceTabId);
+        if (tabIndex !== -1) {
+          sourceTab = existingTabs[tabIndex];
+          sourceCard = card;
+          const filteredTabs = existingTabs.filter(tab => tab.id !== sourceTabId);
+          
+          // If no tabs left, convert back to props
+          if (filteredTabs.length === 0) {
+            return {
+              ...card,
+              tabs: undefined,
+              activeTabId: undefined,
+              props: {},
+            };
+          }
+          
+          // If moving active tab, switch to first remaining tab
+          const newActiveTabId = card.activeTabId === sourceTabId 
+            ? filteredTabs[0]?.id 
+            : card.activeTabId;
+          
+          return {
+            ...card,
+            tabs: filteredTabs,
+            activeTabId: newActiveTabId,
+          };
+        }
+      }
+      return card;
+    });
+
+    if (!sourceTab || !sourceCard) return;
+
+    // Add tab to target card
+    const updatedCards = cardsAfterRemove.map(card => {
+      if (card.id === targetCardId && sourceTab) {
+        const existingTabs = card.tabs || [];
+        
+        // If target has no tabs yet, convert current props to first tab
+        if (existingTabs.length === 0 && card.props) {
+          const firstTab: CardTab = {
+            id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            props: { ...card.props },
+          };
+          const newTabs = [firstTab, sourceTab];
+          if (targetIndex !== undefined && targetIndex >= 0 && targetIndex < newTabs.length) {
+            newTabs.splice(targetIndex, 0, sourceTab);
+            newTabs.pop(); // Remove the duplicate
+          }
+          return {
+            ...card,
+            tabs: newTabs,
+            activeTabId: sourceTab.id,
+            props: undefined,
+          };
+        }
+        
+        // Insert at target index or append
+        const newTabs = [...existingTabs];
+        if (targetIndex !== undefined && targetIndex >= 0 && targetIndex <= newTabs.length) {
+          newTabs.splice(targetIndex, 0, sourceTab);
+        } else {
+          newTabs.push(sourceTab);
+        }
+        
+        return {
+          ...card,
+          tabs: newTabs,
+          activeTabId: sourceTab.id,
+        };
+      }
+      return card;
+    });
+
+    const updatedLayout = {
+      ...currentLayout,
+      cards: updatedCards,
+    };
+
+    set({
+      currentLayout: updatedLayout,
+      workspaces: {
+        ...get().workspaces,
+        ...(currentWorkspaceId && {
+          [currentWorkspaceId]: updatedLayout,
+        }),
+      },
+    });
+    
+    // Auto-save after moving tab (immediate, only if changed)
+    get()._saveLayoutIfChanged().catch((err) => {
+      console.error('Failed to auto-save layout:', err);
+    });
+  },
+
+  updateTabProps: (cardId, tabId, props) => {
+    const currentLayout = get().currentLayout;
+    const currentWorkspaceId = get().currentWorkspaceId;
+    
+    if (!currentLayout) return;
+
+    const updatedCards = currentLayout.cards.map(card => {
+      if (card.id === cardId) {
+        const existingTabs = card.tabs || [];
+        const updatedTabs = existingTabs.map(tab => 
+          tab.id === tabId ? { ...tab, props: { ...tab.props, ...props } } : tab
+        );
+        return {
+          ...card,
+          tabs: updatedTabs,
+        };
+      }
+      return card;
+    });
+
+    const updatedLayout = {
+      ...currentLayout,
+      cards: updatedCards,
+    };
+
+    set({
+      currentLayout: updatedLayout,
+      workspaces: {
+        ...get().workspaces,
+        ...(currentWorkspaceId && {
+          [currentWorkspaceId]: updatedLayout,
+        }),
+      },
+    });
+    
+    // Auto-save after updating tab props (immediate, only if changed)
+    get()._saveLayoutIfChanged().catch((err) => {
+      console.error('Failed to auto-save layout:', err);
+    });
+  },
+
+  // Link management functions
+  createLinkGroup: (cardIds, name, color) => {
+    const linkGroupId = `link-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // If no color provided, assign the next available color from the palette
+    let assignedColor = color;
+    if (!assignedColor) {
+      const existingColors = Object.values(get().linkGroups).map(g => g.color);
+      const availableColors = LINK_GROUP_COLORS.filter(c => !existingColors.includes(c));
+      assignedColor = availableColors.length > 0 
+        ? availableColors[0] 
+        : LINK_GROUP_COLORS[Object.keys(get().linkGroups).length % LINK_GROUP_COLORS.length];
+    }
+    
+    const linkGroup: LinkGroup = {
+      id: linkGroupId,
+      cardIds: [...cardIds],
+      name,
+      color: assignedColor,
+    };
+
+    // Update cards to reference this link group
+    const currentLayout = get().currentLayout;
+    if (currentLayout) {
+      const updatedCards = currentLayout.cards.map(card => {
+        if (cardIds.includes(card.id)) {
+          return { ...card, linkGroupId };
+        }
+        return card;
+      });
+
+      set({
+        linkGroups: {
+          ...get().linkGroups,
+          [linkGroupId]: linkGroup,
+        },
+        currentLayout: {
+          ...currentLayout,
+          cards: updatedCards,
+        },
+      });
+    } else {
+      set({
+        linkGroups: {
+          ...get().linkGroups,
+          [linkGroupId]: linkGroup,
+        },
+      });
+    }
+
+    return linkGroupId;
+  },
+
+  addCardToLinkGroup: (cardId, linkGroupId) => {
+    const linkGroup = get().linkGroups[linkGroupId];
+    if (!linkGroup) return;
+
+    // Add card to link group if not already present
+    if (!linkGroup.cardIds.includes(cardId)) {
+      const updatedLinkGroup = {
+        ...linkGroup,
+        cardIds: [...linkGroup.cardIds, cardId],
+      };
+
+      // Update card to reference this link group
+      const currentLayout = get().currentLayout;
+      if (currentLayout) {
+        const updatedCards = currentLayout.cards.map(card => {
+          if (card.id === cardId) {
+            return { ...card, linkGroupId };
+          }
+          return card;
+        });
+
+        set({
+          linkGroups: {
+            ...get().linkGroups,
+            [linkGroupId]: updatedLinkGroup,
+          },
+          currentLayout: {
+            ...currentLayout,
+            cards: updatedCards,
+          },
+        });
+      } else {
+        set({
+          linkGroups: {
+            ...get().linkGroups,
+            [linkGroupId]: updatedLinkGroup,
+          },
+        });
+      }
+    }
+  },
+
+  removeCardFromLinkGroup: (cardId) => {
+    const currentLayout = get().currentLayout;
+    if (!currentLayout) return;
+
+    const card = currentLayout.cards.find(c => c.id === cardId);
+    if (!card?.linkGroupId) return;
+
+    const linkGroup = get().linkGroups[card.linkGroupId];
+    if (!linkGroup) return;
+
+    // Remove card from link group
+    const updatedCardIds = linkGroup.cardIds.filter(id => id !== cardId);
+    
+    // If link group is now empty, remove it
+    if (updatedCardIds.length === 0) {
+      const { [card.linkGroupId]: removed, ...remainingLinkGroups } = get().linkGroups;
+      set({ linkGroups: remainingLinkGroups });
+    } else {
+      // Update link group
+      set({
+        linkGroups: {
+          ...get().linkGroups,
+          [card.linkGroupId]: {
+            ...linkGroup,
+            cardIds: updatedCardIds,
+          },
+        },
+      });
+    }
+
+    // Remove linkGroupId from card
+    const updatedCards = currentLayout.cards.map(c => {
+      if (c.id === cardId) {
+        const { linkGroupId, ...rest } = c;
+        return rest;
+      }
+      return c;
+    });
+
+    set({
+      currentLayout: {
+        ...currentLayout,
+        cards: updatedCards,
+      },
+    });
+  },
+
+  removeLinkGroup: (linkGroupId) => {
+    const linkGroup = get().linkGroups[linkGroupId];
+    if (!linkGroup) return;
+
+    // Remove linkGroupId from all cards in the group
+    const currentLayout = get().currentLayout;
+    if (currentLayout) {
+      const updatedCards = currentLayout.cards.map(card => {
+        if (card.linkGroupId === linkGroupId) {
+          const { linkGroupId, ...rest } = card;
+          return rest;
+        }
+        return card;
+      });
+
+      set({
+        linkGroups: Object.fromEntries(
+          Object.entries(get().linkGroups).filter(([id]) => id !== linkGroupId)
+        ),
+        currentLayout: {
+          ...currentLayout,
+          cards: updatedCards,
+        },
+      });
+    } else {
+      set({
+        linkGroups: Object.fromEntries(
+          Object.entries(get().linkGroups).filter(([id]) => id !== linkGroupId)
+        ),
+      });
+    }
+  },
+
+  getLinkGroup: (linkGroupId) => {
+    return get().linkGroups[linkGroupId];
+  },
+
+  getCardLinkGroup: (cardId) => {
+    const currentLayout = get().currentLayout;
+    if (!currentLayout) return undefined;
+
+    const card = currentLayout.cards.find(c => c.id === cardId);
+    if (!card?.linkGroupId) return undefined;
+
+    return get().linkGroups[card.linkGroupId];
+  },
+
+  getLinkedCards: (cardId) => {
+    const linkGroup = get().getCardLinkGroup(cardId);
+    if (!linkGroup) return [];
+
+    return linkGroup.cardIds.filter(id => id !== cardId);
+  },
+
+  // Link selection mode functions
+  startLinkSelection: (initialCardId) => {
+    set({
+      linkSelectionMode: true,
+      selectedCardIdsForLinking: new Set([initialCardId]),
+    });
+  },
+
+  toggleCardSelection: (cardId) => {
+    const currentSelection = get().selectedCardIdsForLinking;
+    const newSelection = new Set(currentSelection);
+    
+    if (newSelection.has(cardId)) {
+      newSelection.delete(cardId);
+    } else {
+      newSelection.add(cardId);
+    }
+    
+    set({
+      selectedCardIdsForLinking: newSelection,
+    });
+  },
+
+  clearLinkSelection: () => {
+    set({
+      linkSelectionMode: false,
+      selectedCardIdsForLinking: new Set<string>(),
+    });
+  },
+
+  confirmLinkSelection: (name, color) => {
+    const selectedIds = Array.from(get().selectedCardIdsForLinking);
+    
+    if (selectedIds.length < 2) {
+      // Need at least 2 cards to create a link
+      return null;
+    }
+    
+    const linkGroupId = get().createLinkGroup(selectedIds, name, color);
+    
+    // Clear selection mode
+    set({
+      linkSelectionMode: false,
+      selectedCardIdsForLinking: new Set<string>(),
+    });
+    
+    return linkGroupId;
   },
 }));
 

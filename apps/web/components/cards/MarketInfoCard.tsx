@@ -3,16 +3,18 @@
 import React from 'react';
 import { useMarketStore } from '@/stores/market-store';
 import { useMarketPrice } from '@/lib/hooks/usePolymarketData';
+import { useRealtimePrice } from '@/lib/hooks/useRealtimePrice';
 import { useMemo } from 'react';
-import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { MarketSelector } from '@/components/MarketSelector';
 import { useState } from 'react';
 import { useMarket } from '@/lib/hooks/usePolymarketData';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator';
 import { MarketStatusBadge } from '@/components/ui/MarketStatusBadge';
+import { Search } from 'lucide-react';
+import { MarketSelector } from '@/components/MarketSelector';
+import { CardMarketContext } from '@/components/layout/Card';
 
 interface MarketInfoCardProps {
   marketId?: string;
@@ -20,14 +22,34 @@ interface MarketInfoCardProps {
 }
 
 function MarketInfoCardComponent({ marketId: propMarketId, onMarketChange }: MarketInfoCardProps = {}) {
-  const { selectedMarketId, getMarket } = useMarketStore();
-  // Use prop marketId if provided, otherwise fall back to selectedMarketId
-  const effectiveMarketId = propMarketId || selectedMarketId;
+  const { getMarket } = useMarketStore();
+  // Use prop marketId only - don't fall back to global state to avoid shared state issues
+  const effectiveMarketId = propMarketId;
+  const [showMarketSelector, setShowMarketSelector] = useState(false);
   const { data: price, isLoading } = useMarketPrice(effectiveMarketId);
   const { data: fetchedMarket } = useMarket(effectiveMarketId);
-  const [showMarketSelector, setShowMarketSelector] = useState(false);
+  const { setMarketQuestion } = React.useContext(CardMarketContext);
+  
+  // Subscribe to real-time price updates for instant updates
+  useRealtimePrice(effectiveMarketId || null, 'YES');
 
   const market = fetchedMarket || (effectiveMarketId ? getMarket(effectiveMarketId) : null);
+
+  // Set market question in context for card header display
+  // Always show the full question (like Market Search), not extracted option name
+  React.useEffect(() => {
+    if (!setMarketQuestion) return;
+    
+    // Defer state update to avoid render warnings
+    requestAnimationFrame(() => {
+      if (market) {
+        // Always show the full question, matching Market Search behavior
+        setMarketQuestion(market.question || null);
+      } else {
+        setMarketQuestion(null);
+      }
+    });
+  }, [market, setMarketQuestion]);
 
   const stats = useMemo(() => {
     if (!market || !price) return null;
@@ -58,23 +80,23 @@ function MarketInfoCardComponent({ marketId: propMarketId, onMarketChange }: Mar
   if (!effectiveMarketId) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center h-full gap-4 p-4 text-center">
-          <div className="text-muted-foreground text-sm mb-2">
-            Select a market to view info
-          </div>
-          <Button
-            onClick={() => setShowMarketSelector(true)}
-            variant="outline"
-            size="sm"
-          >
-            <Search className="h-4 w-4 mr-2" />
-            Select Market
-          </Button>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="Select a market to view info"
+          description="Use the search icon in the navbar to select a market"
+          action={{
+            label: 'Select Market',
+            onClick: () => setShowMarketSelector(true),
+          }}
+          className="p-4"
+        />
         <MarketSelector
           open={showMarketSelector}
           onOpenChange={setShowMarketSelector}
-          onSelect={handleSelect}
+          onSelect={(id) => {
+            if (onMarketChange) onMarketChange(id);
+            setShowMarketSelector(false);
+          }}
         />
       </>
     );
@@ -100,13 +122,7 @@ function MarketInfoCardComponent({ marketId: propMarketId, onMarketChange }: Mar
 
   return (
     <div className="h-full flex flex-col p-3 space-y-3">
-      <div className="text-xs flex items-center justify-between mb-2">
-        <div className="flex-1 min-w-0">
-          <div className="font-medium truncate mb-1">{market?.question || 'Market'}</div>
-          <div className="text-muted-foreground text-[10px] uppercase tracking-wide">
-            {market?.slug || effectiveMarketId?.slice(0, 8) || ''}
-          </div>
-        </div>
+      <div className="text-xs flex items-center justify-end">
         {dataUpdatedAt && (
           <DataFreshnessIndicator 
             timestamp={dataUpdatedAt} 
@@ -122,52 +138,51 @@ function MarketInfoCardComponent({ marketId: propMarketId, onMarketChange }: Mar
         endDate={market?.endDate}
         active={market?.active}
         archived={market?.archived}
-        className="mb-2"
       />
 
       {/* Market Stats */}
-      <div className="space-y-2 flex-1">
-        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-          <span className="text-xs text-muted-foreground">24h Volume</span>
-          <span className="text-xs font-mono font-semibold">
+      <div className="space-y-0 flex-1">
+        <div className="flex items-center justify-between py-2.5 border-b border-border/50">
+          <span className="text-xs text-muted-foreground font-medium">24h Volume</span>
+          <span className="text-xs font-mono font-semibold text-foreground">
             {formatCurrency(stats.volume24h)}
           </span>
         </div>
 
-        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-          <span className="text-xs text-muted-foreground">Liquidity</span>
-          <span className="text-xs font-mono font-semibold">
+        <div className="flex items-center justify-between py-2.5 border-b border-border/50">
+          <span className="text-xs text-muted-foreground font-medium">Liquidity</span>
+          <span className="text-xs font-mono font-semibold text-foreground">
             {formatCurrency(stats.liquidity)}
           </span>
         </div>
 
-        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-          <span className="text-xs text-muted-foreground">Current Price</span>
-          <span className="text-xs font-mono font-semibold">
+        <div className="flex items-center justify-between py-2.5 border-b border-border/50">
+          <span className="text-xs text-muted-foreground font-medium">Current Price</span>
+          <span className="text-xs font-mono font-semibold text-foreground">
             ${stats.price.toFixed(4)}
           </span>
         </div>
 
-        <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-          <span className="text-xs text-muted-foreground">Probability</span>
-          <span className="text-xs font-mono font-semibold">
+        <div className="flex items-center justify-between py-2.5 border-b border-border/50">
+          <span className="text-xs text-muted-foreground font-medium">Probability</span>
+          <span className="text-xs font-mono font-semibold text-foreground">
             {stats.probability.toFixed(2)}%
           </span>
         </div>
 
         {market?.endDate && (
-          <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-            <span className="text-xs text-muted-foreground">End Date</span>
-            <span className="text-xs font-mono">
+          <div className="flex items-center justify-between py-2.5 border-b border-border/50">
+            <span className="text-xs text-muted-foreground font-medium">End Date</span>
+            <span className="text-xs font-mono text-foreground">
               {new Date(market.endDate).toLocaleDateString()}
             </span>
           </div>
         )}
 
         {market?.category && (
-          <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
-            <span className="text-xs text-muted-foreground">Category</span>
-            <span className="text-xs font-medium capitalize">
+          <div className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-b-0">
+            <span className="text-xs text-muted-foreground font-medium">Category</span>
+            <span className="text-xs font-medium capitalize text-foreground">
               {market.category}
             </span>
           </div>

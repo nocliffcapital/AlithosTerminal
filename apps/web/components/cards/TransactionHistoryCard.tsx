@@ -127,7 +127,7 @@ function TransactionHistoryCardComponent() {
                 setFilter(f);
                 setPage(0);
               }}
-              className="text-xs h-6 px-2"
+              className="text-xs px-2"
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </Button>
@@ -136,7 +136,7 @@ function TransactionHistoryCardComponent() {
       </div>
 
       {/* Transactions List */}
-      <div className="flex-1 overflow-auto space-y-1">
+      <div className="flex-1 overflow-auto space-y-2">
         {transactions.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-sm text-muted-foreground">
@@ -147,7 +147,7 @@ function TransactionHistoryCardComponent() {
           transactions.map((tx) => (
             <div
               key={tx.id}
-              className="flex items-center gap-2 p-2 rounded border border-border hover:bg-muted/50 transition-colors"
+              className="flex items-center gap-2 p-3 rounded border border-border hover:bg-muted/50 transition-colors duration-200"
             >
               <div className="flex-shrink-0">
                 {getTransactionIcon(tx.type)}
@@ -169,7 +169,7 @@ function TransactionHistoryCardComponent() {
                       </div>
                     )}
                     {tx.status && (
-                      <div className={`text-[10px] ${
+                      <div className={`text-xs ${
                         tx.status === 'confirmed' ? 'text-green-400' :
                         tx.status === 'pending' ? 'text-yellow-400' :
                         'text-red-400'

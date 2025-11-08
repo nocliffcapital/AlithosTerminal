@@ -3,11 +3,13 @@
 import React, { useState, useMemo } from 'react';
 import { useMarketStore } from '@/stores/market-store';
 import { useMarketPrice } from '@/lib/hooks/usePolymarketData';
+import { useRealtimePrice } from '@/lib/hooks/useRealtimePrice';
 import { kellyFraction as calculateKellyFraction, breakEvenProb, evPerDollar } from '@alithos-terminal/shared';
 import { Loader2, Search, Calculator, TrendingUp, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MarketSelector } from '@/components/MarketSelector';
 import { Slider } from '@/components/ui/slider';
 
@@ -15,6 +17,9 @@ function KellyCalculatorCardComponent() {
   const { selectedMarketId, getMarket } = useMarketStore();
   const { data: price, isLoading } = useMarketPrice(selectedMarketId);
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  
+  // Subscribe to real-time price updates for instant updates
+  useRealtimePrice(selectedMarketId || null, 'YES');
   
   // User inputs
   const [belief, setBelief] = useState<string>('');
@@ -115,13 +120,13 @@ function KellyCalculatorCardComponent() {
 
       {isLoading ? (
         <div className="flex items-center justify-center flex-1">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <LoadingSpinner size="sm" text="Loading market data..." />
         </div>
       ) : (
         <div className="flex flex-col space-y-3 flex-1 min-h-0">
           {/* Belief Input */}
-          <div className="space-y-1 flex-shrink-0">
-            <Label className="text-xs">Your Belief (Probability %)</Label>
+          <div className="space-y-2 flex-shrink-0">
+            <Label>Your Belief (Probability %)</Label>
             <Input
               type="number"
               min="0"
@@ -135,14 +140,14 @@ function KellyCalculatorCardComponent() {
           </div>
 
           {/* Entry Price Input */}
-          <div className="space-y-1 flex-shrink-0">
+          <div className="space-y-2 flex-shrink-0">
             <div className="flex items-center justify-between">
-              <Label className="text-xs">Entry Price (Probability %)</Label>
+              <Label>Entry Price (Probability %)</Label>
               {currentProbability > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 text-xs px-2"
+                  className="text-xs px-2"
                   onClick={handleUseCurrentPrice}
                 >
                   Use Current ({currentProbability.toFixed(1)}%)
@@ -162,8 +167,8 @@ function KellyCalculatorCardComponent() {
           </div>
 
           {/* Profit Fee Input */}
-          <div className="space-y-1 flex-shrink-0">
-            <Label className="text-xs">Profit Fee (%)</Label>
+          <div className="space-y-2 flex-shrink-0">
+            <Label>Profit Fee (%)</Label>
             <Input
               type="number"
               min="0"
@@ -179,7 +184,7 @@ function KellyCalculatorCardComponent() {
           {/* Kelly Fraction Slider */}
           <div className="space-y-2 flex-shrink-0">
             <div className="flex items-center justify-between">
-              <Label className="text-xs">Kelly Fraction (%)</Label>
+              <Label>Kelly Fraction (%)</Label>
               <span className="text-xs text-muted-foreground font-mono">{kellyFraction}%</span>
             </div>
             <Slider
@@ -195,7 +200,7 @@ function KellyCalculatorCardComponent() {
           {/* Max Position Slider */}
           <div className="space-y-2 flex-shrink-0">
             <div className="flex items-center justify-between">
-              <Label className="text-xs">Max Position (%)</Label>
+              <Label>Max Position (%)</Label>
               <span className="text-xs text-muted-foreground font-mono">{maxPosition}%</span>
             </div>
             <Slider
@@ -209,8 +214,8 @@ function KellyCalculatorCardComponent() {
           </div>
 
           {/* Bankroll Input */}
-          <div className="space-y-1 flex-shrink-0">
-            <Label className="text-xs">Bankroll (USDC)</Label>
+          <div className="space-y-2 flex-shrink-0">
+            <Label>Bankroll (USDC)</Label>
             <Input
               type="number"
               min="0"
@@ -224,33 +229,33 @@ function KellyCalculatorCardComponent() {
 
           {/* Results */}
           {calculations && (
-            <div className="space-y-2 flex-shrink-0 p-3 bg-muted rounded-lg border border-border">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="space-y-0 flex-shrink-0 border border-border rounded-lg overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
                 <TrendingUp className="h-4 w-4" />
-                <span className="text-xs font-semibold">Calculations</span>
+                <span className="text-xs font-semibold text-foreground">Calculations</span>
               </div>
               
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Break-Even:</span>
-                  <span className="font-mono font-medium">{calculations.breakEven.toFixed(2)}%</span>
+              <div className="space-y-0 text-xs">
+                <div className="flex items-center justify-between py-2.5 px-3 border-b border-border/50">
+                  <span className="text-muted-foreground font-medium">Break-Even:</span>
+                  <span className="font-mono font-semibold text-foreground">{calculations.breakEven.toFixed(2)}%</span>
                 </div>
                 
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Edge:</span>
-                  <span className={`font-mono font-medium ${calculations.edge > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <div className="flex items-center justify-between py-2.5 px-3 border-b border-border/50">
+                  <span className="text-muted-foreground font-medium">Edge:</span>
+                  <span className={`font-mono font-semibold ${calculations.edge > 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {calculations.edge > 0 ? '+' : ''}{calculations.edge.toFixed(2)}%
                   </span>
                 </div>
                 
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Expected Value:</span>
-                  <span className={`font-mono font-medium ${calculations.isPositiveEV ? 'text-green-400' : 'text-red-400'}`}>
+                <div className="flex items-center justify-between py-2.5 px-3 border-b border-border/50">
+                  <span className="text-muted-foreground font-medium">Expected Value:</span>
+                  <span className={`font-mono font-semibold ${calculations.isPositiveEV ? 'text-green-400' : 'text-red-400'}`}>
                     {calculations.evPercent > 0 ? '+' : ''}{calculations.evPercent.toFixed(2)}% per $1
                   </span>
                 </div>
                 
-                <div className="border-t border-border pt-2 mt-2">
+                <div className="pt-2.5 px-3 pb-2.5 border-t border-border/50">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-muted-foreground">Kelly Position:</span>
                     <span className="font-mono font-semibold">{calculations.kelly.toFixed(2)}%</span>

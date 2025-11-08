@@ -2,9 +2,10 @@
 
 import React from 'react';
 import { useTrades } from '@/lib/hooks/usePolymarketData';
+import { useRealtimeTrades } from '@/lib/hooks/useRealtimeTrades';
 import { onChainService } from '@/lib/api/onchain';
 import { useMarketStore } from '@/stores/market-store';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, Wallet, Zap, DollarSign } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef, useCallback, useContext } from 'react';
 import { Button } from '@/components/ui/button';
 import { MarketSelector } from '@/components/MarketSelector';
@@ -12,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CardHeaderActionsContext } from '@/components/layout/Card';
+import { cn } from '@/lib/utils';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface Trade {
   id: string;
@@ -27,6 +30,10 @@ interface Trade {
 function TapeCardComponent() {
   const { selectedMarketId } = useMarketStore();
   const { data: trades = [], isLoading, error } = useTrades(selectedMarketId);
+  
+  // Subscribe to real-time trade updates for instant updates
+  useRealtimeTrades(selectedMarketId);
+  
   const [walletTags, setWalletTags] = useState<Map<string, string>>(new Map());
   const prevTradesRef = useRef<string>('');
   const [showMarketSelector, setShowMarketSelector] = useState(false);
@@ -136,6 +143,19 @@ function TapeCardComponent() {
     }
   }, []);
 
+  const getWalletTagIcon = useCallback((type: string) => {
+    switch (type) {
+      case 'whale':
+        return <Wallet className="h-3 w-3" />;
+      case 'market-maker':
+        return <Zap className="h-3 w-3" />;
+      case 'new-money':
+        return <DollarSign className="h-3 w-3" />;
+      default:
+        return null;
+    }
+  }, []);
+
   // Helper function to normalize amount from wei to USDC
   const normalizeAmount = useCallback((amountStr: string): number => {
     if (!amountStr || amountStr === '0') return 0;
@@ -181,40 +201,14 @@ function TapeCardComponent() {
     
     let filtered = [...trades];
     
-    // Debug: Log sample trade amounts to understand format
-    if (trades.length > 0 && (minSize || maxSize)) {
-      console.log('[TapeCard] Sample trade amounts (first 5):', 
-        trades.slice(0, 5).map(t => ({
-          id: t.id,
-          rawAmount: t.amount,
-          normalized: normalizeAmount(t.amount || '0'),
-          type: typeof t.amount,
-        }))
-      );
-    }
-    
     // Filter by minimum size
     if (minSize && minSize.trim() !== '') {
       const min = parseFloat(minSize);
       if (!isNaN(min) && min >= 0) {
-        const beforeCount = filtered.length;
         filtered = filtered.filter((trade) => {
           const normalizedAmount = normalizeAmount(trade.amount || '0');
-          const passes = normalizedAmount >= min;
-          
-          if (!passes) {
-            console.log(`[TapeCard] Trade filtered out:`, {
-              tradeId: trade.id,
-              rawAmount: trade.amount,
-              normalizedAmount,
-              min,
-              passes,
-            });
-          }
-          
-          return passes;
+          return normalizedAmount >= min;
         });
-        console.log(`[TapeCard] Min filter: ${beforeCount} -> ${filtered.length} trades (min=${min})`);
       }
     }
     
@@ -222,60 +216,9 @@ function TapeCardComponent() {
     if (maxSize && maxSize.trim() !== '') {
       const max = parseFloat(maxSize);
       if (!isNaN(max) && max > 0) {
-        const beforeCount = filtered.length;
         filtered = filtered.filter((trade) => {
           const normalizedAmount = normalizeAmount(trade.amount || '0');
-          const passes = normalizedAmount <= max;
-          
-          if (!passes) {
-            console.log(`[TapeCard] Trade filtered out:`, {
-              tradeId: trade.id,
-              rawAmount: trade.amount,
-              normalizedAmount,
-              max,
-              passes,
-            });
-          }
-          
-          return passes;
-        });
-        console.log(`[TapeCard] Max filter: ${beforeCount} -> ${filtered.length} trades (max=${max})`);
-      }
-    }
-    
-    // Debug: Log final filtered trades
-    if ((minSize || maxSize) && filtered.length > 0) {
-      console.log('[TapeCard] Filtered trades (first 5):', 
-        filtered.slice(0, 5).map(t => ({
-          id: t.id,
-          rawAmount: t.amount,
-          normalized: normalizeAmount(t.amount || '0'),
-        }))
-      );
-    }
-    
-    // Verify all filtered trades actually pass the filters
-    if ((minSize || maxSize) && filtered.length > 0) {
-      const min = minSize ? parseFloat(minSize) : -Infinity;
-      const max = maxSize ? parseFloat(maxSize) : Infinity;
-      
-      const invalidTrades = filtered.filter(trade => {
-        const normalizedAmount = normalizeAmount(trade.amount || '0');
-        const passesMin = isNaN(min) || min < 0 || normalizedAmount >= min;
-        const passesMax = isNaN(max) || max <= 0 || normalizedAmount <= max;
-        return !passesMin || !passesMax;
-      });
-      
-      if (invalidTrades.length > 0) {
-        console.error('[TapeCard] ERROR: Found trades in filtered array that should be filtered out!', {
-          invalidCount: invalidTrades.length,
-          invalidTrades: invalidTrades.map(t => ({
-            id: t.id,
-            rawAmount: t.amount,
-            normalized: normalizeAmount(t.amount || '0'),
-            min,
-            max,
-          })),
+          return normalizedAmount <= max;
         });
       }
     }
@@ -283,35 +226,19 @@ function TapeCardComponent() {
     return filtered;
   }, [trades, minSize, maxSize, normalizeAmount]);
 
-  // Debug: Log when filteredTrades changes
-  useEffect(() => {
-    if (minSize || maxSize) {
-      console.log('[TapeCard] filteredTrades updated:', {
-        totalTrades: trades.length,
-        filteredCount: filteredTrades.length,
-        minSize,
-        maxSize,
-        renderingTrades: filteredTrades.length,
-      });
-    }
-  }, [filteredTrades, trades.length, minSize, maxSize]);
-
   if (!selectedMarketId) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center h-full gap-4 p-4 text-center">
-          <div className="text-muted-foreground text-sm mb-2">
-            Select a market to view tape
-          </div>
-          <Button
-            onClick={handleShowMarketSelector}
-            variant="outline"
-            size="sm"
-          >
-            <Search className="h-4 w-4 mr-2" />
-            Select Market
-          </Button>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="Select a market to view tape"
+          description="Choose a market to see its trading activity"
+          action={{
+            label: 'Select Market',
+            onClick: handleShowMarketSelector,
+          }}
+          className="p-4"
+        />
         <MarketSelector
           open={showMarketSelector}
           onOpenChange={handleCloseMarketSelector}
@@ -323,119 +250,113 @@ function TapeCardComponent() {
   return (
     <>
       <div className="h-full flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-y-auto space-y-0.5 p-1">
+        {/* Header */}
+        {(minSize || maxSize) && (
+          <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-accent/20">
+            <div className="flex items-center justify-end">
+              <div className="text-[10px] text-muted-foreground">
+                {filteredTrades.length} of {trades.length} trades
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Trade List */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               Loading trades...
             </div>
           ) : error ? (
-            <div className="flex items-center justify-center h-full text-destructive text-sm">
+            <div className="flex items-center justify-center h-full text-destructive text-sm px-4">
               Failed to load trades
             </div>
           ) : filteredTrades.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm px-4 text-center">
               {trades.length === 0 ? 'No trades yet' : `No trades match filter (${trades.length} total)`}
             </div>
           ) : (
-            filteredTrades.map((trade: Trade) => {
-              // Debug: Log what we're about to render and verify filter (only on first trade)
-              if (minSize || maxSize) {
-                const isFirstTrade = filteredTrades.indexOf(trade) === 0;
-                if (isFirstTrade) {
-                  const min = minSize ? parseFloat(minSize) : -Infinity;
-                  const max = maxSize ? parseFloat(maxSize) : Infinity;
-                  
-                  // Check if any trades in filteredTrades don't pass the filter
-                  const invalidInFiltered = filteredTrades.filter(t => {
-                    const norm = normalizeAmount(t.amount || '0');
-                    return (min >= 0 && norm < min) || (max > 0 && norm > max);
-                  });
-                  
-                  console.log('[TapeCard] Rendering trades:', {
-                    filteredCount: filteredTrades.length,
-                    totalCount: trades.length,
-                    minSize,
-                    maxSize,
-                    invalidInFiltered: invalidInFiltered.length,
-                    firstFewAmounts: filteredTrades.slice(0, 5).map(t => ({
-                      raw: t.amount,
-                      normalized: normalizeAmount(t.amount || '0'),
-                      passesMin: min < 0 || normalizeAmount(t.amount || '0') >= min,
-                      passesMax: max <= 0 || normalizeAmount(t.amount || '0') <= max,
-                    })),
-                  });
-                  
-                  if (invalidInFiltered.length > 0) {
-                    console.error('[TapeCard] CRITICAL: Found invalid trades in filteredTrades:', invalidInFiltered);
-                  }
-                }
-              }
-              
-              const walletType = walletTags.get(trade.user) || 'unknown';
-              const isBuy = trade.outcome === 'YES';
-              
-              // Ensure unique key - combine ID, timestamp, and transactionHash to prevent duplicates
-              const uniqueKey = `${trade.id}-${trade.timestamp}-${trade.transactionHash || trade.user}`;
-              
-              return (
-              <div
-                key={uniqueKey}
-                className={`flex items-center justify-between px-2 py-1.5 text-xs border-b border-border/50 gap-2 ${
-                  isBuy ? 'bg-green-500/10' : 'bg-red-500/10'
-                }`}
-              >
-                {/* User & Wallet Tag */}
-                <div className="flex items-center gap-1.5 min-w-0 flex-shrink-0">
-                  <span className={getWalletTagColor(walletType)}>
-                    {walletType === 'whale' ? '🐋' : walletType === 'market-maker' ? '⚡' : '💰'}
-                  </span>
-                  <span className="font-mono text-[10px] truncate">
-                    {trade.user.slice(0, 6)}...{trade.user.slice(-4)}
-                  </span>
-                </div>
-
-                {/* Action (BUY/SELL) */}
-                <div className={`font-semibold text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 ${
-                  isBuy 
-                    ? 'bg-green-500/20 text-green-400' 
-                    : 'bg-red-500/20 text-red-400'
-                }`}>
-                  {isBuy ? 'BUY' : 'SELL'}
-                </div>
-
-                {/* Market (simplified - could show market name if available) */}
-                <div className="text-[10px] text-muted-foreground truncate flex-1 min-w-0">
-                  {trade.marketId.slice(0, 12)}...
-                </div>
-
-                {/* Outcome */}
-                <div className={`font-mono font-medium text-[10px] flex-shrink-0 ${
-                  isBuy ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {trade.outcome}
-                </div>
-
-                {/* Amount */}
-                <div className="font-mono text-[10px] text-muted-foreground flex-shrink-0">
-                  ${normalizeAmount(trade.amount).toLocaleString('en-US', { 
-                    minimumFractionDigits: 2, 
-                    maximumFractionDigits: 2 
-                  })}
-                </div>
-
-                {/* Price */}
-                <div className="font-mono text-[10px] font-semibold flex-shrink-0">
-                  {trade.price.toFixed(2)}c
-                </div>
-
-                {/* Time */}
-                <div className="text-[10px] text-muted-foreground flex-shrink-0">
-                  {formatTime(trade.timestamp)}
-                </div>
+            <div className="divide-y divide-border/50">
+              {/* Column Headers */}
+              <div className="sticky top-0 bg-background z-10 border-b border-border px-3 py-2 grid grid-cols-[auto_60px_1fr_50px_80px_60px_70px] gap-2">
+                <div className="text-xs font-semibold text-muted-foreground">Wallet</div>
+                <div className="text-xs font-semibold text-muted-foreground text-center">Action</div>
+                <div className="text-xs font-semibold text-muted-foreground">Market</div>
+                <div className="text-xs font-semibold text-muted-foreground text-center">Outcome</div>
+                <div className="text-xs font-semibold text-muted-foreground text-right">Amount</div>
+                <div className="text-xs font-semibold text-muted-foreground text-right">Price</div>
+                <div className="text-xs font-semibold text-muted-foreground text-right">Time</div>
               </div>
-            );
-            })
+              {filteredTrades.map((trade: Trade) => {
+                const walletType = walletTags.get(trade.user) || 'unknown';
+                const isBuy = trade.outcome === 'YES';
+                
+                // Ensure unique key - combine ID, timestamp, and transactionHash to prevent duplicates
+                const uniqueKey = `${trade.id}-${trade.timestamp}-${trade.transactionHash || trade.user}`;
+                
+                return (
+                  <div
+                    key={uniqueKey}
+                    className={cn(
+                      "px-3 py-2 hover:bg-accent/30 transition-colors duration-200 grid grid-cols-[auto_60px_1fr_50px_80px_60px_70px] gap-2 items-center text-xs",
+                      isBuy ? 'bg-green-500/5' : 'bg-red-500/5'
+                    )}
+                  >
+                    {/* User & Wallet Tag */}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={cn("flex-shrink-0", getWalletTagColor(walletType))}>
+                        {getWalletTagIcon(walletType)}
+                      </span>
+                      <span className="font-mono text-xs truncate" title={trade.user}>
+                        {trade.user.slice(0, 8)}...{trade.user.slice(-6)}
+                      </span>
+                    </div>
+
+                    {/* Action (BUY/SELL) */}
+                    <div className={cn(
+                      "font-semibold text-xs px-1.5 py-0.5 rounded text-center",
+                      isBuy 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : 'bg-red-500/20 text-red-400'
+                    )}>
+                      {isBuy ? 'BUY' : 'SELL'}
+                    </div>
+
+                    {/* Market */}
+                    <div className="text-xs text-muted-foreground truncate min-w-0">
+                      {trade.marketId.slice(0, 12)}...
+                    </div>
+
+                    {/* Outcome */}
+                    <div className={cn(
+                      "font-mono font-medium text-xs text-center",
+                      isBuy ? 'text-green-400' : 'text-red-400'
+                    )}>
+                      {trade.outcome}
+                    </div>
+
+                    {/* Amount */}
+                    <div className="font-mono text-xs text-muted-foreground text-right">
+                      ${normalizeAmount(trade.amount).toLocaleString('en-US', { 
+                        minimumFractionDigits: 2, 
+                        maximumFractionDigits: 2 
+                      })}
+                    </div>
+
+                    {/* Price */}
+                    <div className="font-mono text-xs font-semibold text-right">
+                      {trade.price.toFixed(2)}c
+                    </div>
+
+                    {/* Time */}
+                    <div className="text-xs text-muted-foreground text-right">
+                      {formatTime(trade.timestamp)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -453,7 +374,7 @@ function TapeCardComponent() {
           <div className="space-y-4 py-4">
             {/* Minimum Size */}
             <div className="space-y-2">
-              <Label htmlFor="min-size" className="text-sm">
+              <Label htmlFor="min-size">
                 Minimum Size (USDC)
               </Label>
               <Input
@@ -472,7 +393,7 @@ function TapeCardComponent() {
 
             {/* Maximum Size */}
             <div className="space-y-2">
-              <Label htmlFor="max-size" className="text-sm">
+              <Label htmlFor="max-size">
                 Maximum Size (USDC)
               </Label>
               <Input

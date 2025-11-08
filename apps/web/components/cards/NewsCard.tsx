@@ -7,7 +7,10 @@ import { useMarket } from '@/lib/hooks/usePolymarketData';
 import { Loader2, ExternalLink, Calendar, User, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { MarketSelector } from '@/components/MarketSelector';
+import { CardMarketContext } from '@/components/layout/Card';
 
 interface NewsCardProps {
   marketId?: string;
@@ -19,6 +22,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
   const [days, setDays] = useState<number>(7);
   const [limit, setLimit] = useState<number>(10);
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  const { setMarketQuestion } = React.useContext(CardMarketContext);
 
   // Use prop marketId if provided, otherwise fall back to selectedMarketId for backward compatibility
   const effectiveMarketId = propMarketId || null;
@@ -26,6 +30,22 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
   const { data: market, isLoading: isLoadingMarket } = useMarket(effectiveMarketId);
   const storedMarket = effectiveMarketId ? getMarket(effectiveMarketId) : null;
   const displayMarket = market || storedMarket;
+
+  // Set market question in context for card header display
+  // Always show the full question (like Market Search), not extracted option name
+  React.useEffect(() => {
+    if (!setMarketQuestion) return;
+    
+    // Defer state update to avoid render warnings
+    requestAnimationFrame(() => {
+      if (displayMarket) {
+        // Always show the full question, matching Market Search behavior
+        setMarketQuestion(displayMarket.question || null);
+      } else {
+        setMarketQuestion(null);
+      }
+    });
+  }, [displayMarket, setMarketQuestion]);
   
   const marketQuery = displayMarket?.question || displayMarket?.slug || effectiveMarketId || null;
 
@@ -64,29 +84,21 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
   if (!effectiveMarketId || !displayMarket) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center h-full gap-4 p-4 text-center">
-          <div className="text-muted-foreground text-sm mb-2">
-            Select a market to view related news
-          </div>
-          <Button
-            onClick={() => setShowMarketSelector(true)}
-            variant="outline"
-            size="sm"
-          >
-            <Search className="h-4 w-4 mr-2" />
-            Select Market
-          </Button>
-          <div className="text-xs text-muted-foreground/70 max-w-xs">
-            News articles related to the selected market will appear here
-          </div>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="Select a market to view related news"
+          description="Use the search icon in the navbar to select a market"
+          action={{
+            label: 'Select Market',
+            onClick: () => setShowMarketSelector(true),
+          }}
+          className="p-4"
+        />
         <MarketSelector
           open={showMarketSelector}
           onOpenChange={setShowMarketSelector}
-          onSelect={(selectedMarketId) => {
-            if (onMarketChange) {
-              onMarketChange(selectedMarketId);
-            }
+          onSelect={(id) => {
+            if (onMarketChange) onMarketChange(id);
             setShowMarketSelector(false);
           }}
         />
@@ -97,18 +109,9 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 p-2 sm:p-3 border-b border-border space-y-2">
+      <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-accent/20 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs sm:text-sm font-semibold">News</div>
-          <Button
-            onClick={() => setShowMarketSelector(true)}
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs"
-          >
-            <Search className="h-3 w-3 mr-1" />
-            Change Market
-          </Button>
         </div>
         
         {/* Controls */}
@@ -147,35 +150,18 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
             </select>
           </div>
         </div>
-
-        {/* Market Info */}
-        <div className="text-[10px] sm:text-xs text-muted-foreground truncate" title={displayMarket.question}>
-          {displayMarket.question}
-        </div>
       </div>
-      
-      {/* Market Selector Modal */}
-      <MarketSelector
-        open={showMarketSelector}
-        onOpenChange={setShowMarketSelector}
-        onSelect={(selectedMarketId) => {
-          if (onMarketChange) {
-            onMarketChange(selectedMarketId);
-          }
-          setShowMarketSelector(false);
-        }}
-      />
 
       {/* News List */}
-      <div className="flex-1 overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {isLoading ? (
           <div className="flex items-center justify-center h-32 sm:h-48">
-            <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin text-muted-foreground" />
+            <LoadingSpinner size="sm" text="Loading news..." />
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-32 sm:h-48 text-muted-foreground text-xs sm:text-sm text-center px-4">
             <div className="mb-2 font-semibold">Failed to load news</div>
-            <div className="text-[10px] sm:text-xs text-muted-foreground/70 mb-2 break-words max-w-full px-2">
+              <div className="text-xs text-muted-foreground/70 mb-2 break-words max-w-full px-2">
               {error instanceof Error ? error.message : String(error)}
             </div>
             {(error instanceof Error && 
@@ -183,12 +169,12 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
                error.message.includes('401') || 
                error.message.includes('403') ||
                error.message.includes('unauthorized'))) && (
-              <div className="text-[10px] sm:text-xs text-muted-foreground/70 mt-2 max-w-xs bg-muted/50 p-2 rounded">
+              <div className="text-xs text-muted-foreground/70 mt-2 max-w-xs p-2 rounded border border-border/50">
                 Please configure ADJACENT_NEWS_API_KEY in your .env.local file
               </div>
             )}
             {error instanceof Error && error.message.includes('Market not found') && (
-              <div className="text-[10px] sm:text-xs text-muted-foreground/70 mt-2 max-w-xs">
+              <div className="text-xs text-muted-foreground/70 mt-2 max-w-xs">
                 Try selecting a different market or using a broader search term
               </div>
             )}
@@ -197,7 +183,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
           <div className="flex items-center justify-center h-32 sm:h-48 text-muted-foreground text-xs sm:text-sm text-center px-4">
             No news articles found for this market
             {newsData?.meta && (
-              <div className="text-[10px] sm:text-xs text-muted-foreground/70 mt-2">
+              <div className="text-xs text-muted-foreground/70 mt-2">
                 Try increasing the days parameter or broadening your search
               </div>
             )}
@@ -206,7 +192,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
           newsData.data.map((article) => (
             <div
               key={article.url}
-              className="p-3 sm:p-4 bg-muted/30 hover:bg-muted/50 border border-transparent hover:border-border transition-colors"
+              className="p-3 bg-transparent hover:bg-accent/20 border border-border/50 hover:border-border transition-colors duration-200 rounded"
             >
               <div className="space-y-2">
                 {/* Title */}
@@ -229,7 +215,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
                 )}
 
                 {/* Metadata */}
-                <div className="flex flex-wrap items-center gap-3 text-[10px] sm:text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   {/* Domain */}
                   <div className="flex items-center gap-1">
                     <ExternalLink className="h-3 w-3" />
@@ -258,7 +244,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
                   href={article.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-[10px] sm:text-xs text-primary hover:text-primary/80 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors duration-200"
                 >
                   Read article
                   <ExternalLink className="h-3 w-3" />

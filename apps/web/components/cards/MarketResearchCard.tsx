@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useMarketStore } from '@/stores/market-store';
 import { useMarket } from '@/lib/hooks/usePolymarketData';
-import { Search, Loader2, CheckCircle2, XCircle, AlertCircle, ExternalLink, Brain, TrendingUp, Sparkles, FileSearch, CheckCircle, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, AlertCircle, ExternalLink, Brain, TrendingUp, Sparkles, FileSearch, CheckCircle, Download, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { MarketSelector } from '@/components/MarketSelector';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MarketResearchResult, FinalVerdict, GradedSource } from '@/lib/market-research/types';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { MarketSelector } from '@/components/MarketSelector';
+import { CardMarketContext } from '@/components/layout/Card';
 
 interface MarketResearchCardProps {
   marketId?: string;
@@ -22,6 +24,7 @@ type ResearchStage = {
 };
 
 const RESEARCH_STAGES: ResearchStage[] = [
+  { id: 'researching', label: 'Researching sources', Icon: FileSearch, estimatedTime: 4000 },
   { id: 'planning', label: 'Planning research strategy', Icon: Brain, estimatedTime: 1500 },
   { id: 'searching', label: 'Searching credible sources', Icon: FileSearch, estimatedTime: 3000 },
   { id: 'grading', label: 'Grading sources (A-D)', Icon: Sparkles, estimatedTime: 2000 },
@@ -30,12 +33,25 @@ const RESEARCH_STAGES: ResearchStage[] = [
   { id: 'finalizing', label: 'Finalizing results', Icon: CheckCircle, estimatedTime: 1000 },
 ];
 
+/**
+ * Check if a string is a valid HTTP/HTTPS URL
+ */
+function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }: MarketResearchCardProps = {}) {
-  const { selectedMarketId } = useMarketStore();
   const { user, authenticated } = usePrivy();
-  const effectiveMarketId = propMarketId || selectedMarketId;
-  const { data: market, isLoading: marketLoading } = useMarket(effectiveMarketId);
+  // Use prop marketId only - don't fall back to global state to avoid shared state issues
+  const effectiveMarketId = propMarketId;
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  const { data: market, isLoading: marketLoading } = useMarket(effectiveMarketId);
+  const { setMarketQuestion } = React.useContext(CardMarketContext);
   const [researchResult, setResearchResult] = useState<MarketResearchResult | null>(null);
   const [isResearching, setIsResearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +67,22 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
     setResearchResult(null);
     setError(null);
   };
+
+  // Set market question in context for card header display
+  // Always show the full question (like Market Search), not extracted option name
+  React.useEffect(() => {
+    if (!setMarketQuestion) return;
+    
+    // Defer state update to avoid render warnings
+    requestAnimationFrame(() => {
+      if (market) {
+        // Always show the full question, matching Market Search behavior
+        setMarketQuestion(market.question || null);
+      } else {
+        setMarketQuestion(null);
+      }
+    });
+  }, [market, setMarketQuestion]);
 
   // Animate through stages while research is running
   useEffect(() => {
@@ -123,9 +155,9 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
     setCurrentStage(0);
     setStageProgress(0);
 
-    // Add timeout for long-running requests (120 seconds)
+    // Add timeout for long-running requests (180 seconds to match backend)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 seconds
+    const timeoutId = setTimeout(() => controller.abort(), 180000); // 180 seconds (3 minutes)
 
     try {
       const response = await fetch('/api/market-research', {
@@ -239,24 +271,23 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
   if (!effectiveMarketId) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center h-full gap-4 p-4 text-center">
-          <Brain className="h-8 w-8 text-muted-foreground" />
-          <div className="text-muted-foreground text-sm mb-2">
-            Select a market to analyze
-          </div>
-          <Button
-            onClick={() => setShowMarketSelector(true)}
-            variant="outline"
-            size="sm"
-          >
-            <Search className="h-4 w-4 mr-2" />
-            Select Market
-          </Button>
-        </div>
+        <EmptyState
+          icon={Brain}
+          title="Select a market to analyze"
+          description="Use the search icon in the navbar to select a market"
+          action={{
+            label: 'Select Market',
+            onClick: () => setShowMarketSelector(true),
+          }}
+          className="p-4"
+        />
         <MarketSelector
           open={showMarketSelector}
           onOpenChange={setShowMarketSelector}
-          onSelect={handleSelect}
+          onSelect={(id) => {
+            if (onMarketChange) onMarketChange(id);
+            setShowMarketSelector(false);
+          }}
         />
       </>
     );
@@ -280,48 +311,54 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex-shrink-0 p-2 border-b border-border">
-        <div className="text-xs font-semibold truncate mb-0.5">{market.question}</div>
-        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-          <Brain className="h-3 w-3" />
-          AI Market Research
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {/* Analyze Button */}
         {!researchResult && !isResearching && (
-          <div className="flex flex-col items-center justify-center gap-2 py-4">
+          <div className="flex flex-col items-center justify-center gap-3 py-6">
+            <div className="flex flex-col items-center gap-2">
+              <div className="p-2 rounded-full bg-primary/10 border border-primary/20">
+                <Brain className="h-5 w-5 text-primary" />
+              </div>
+              <div className="text-center">
+                <div className="text-xs font-semibold text-foreground mb-1">
+                  AI Market Research
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {market ? `Analyzing: ${market.question}` : 'Select a market to analyze'}
+                </div>
+              </div>
+            </div>
             <Button
               onClick={handleAnalyze}
-              disabled={isResearching}
+              disabled={isResearching || !market}
               size="sm"
-              className="w-full"
+              className="w-full max-w-xs"
             >
-              <Brain className="h-4 w-4 mr-2" />
+              <Brain className="h-3.5 w-3.5 mr-2" />
               Analyze Market
             </Button>
             {error && (
-              <div className="text-xs text-red-400 text-center mt-2">{error}</div>
+              <div className="text-xs text-red-400 text-center mt-2 px-4">{error}</div>
             )}
           </div>
         )}
 
         {/* Loading Animation with Progress Stages */}
         {isResearching && (
-          <div className="flex flex-col items-center justify-center gap-4 py-6">
+          <div className="flex flex-col items-center justify-center gap-6 py-6">
             {/* Animated Brain Icon */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="absolute w-16 h-16 bg-primary/20 rounded-full animate-ping" />
-                <div className="absolute w-12 h-12 bg-primary/30 rounded-full animate-pulse" />
+                <div className="absolute w-20 h-20 bg-primary/20 rounded-full animate-ping" />
+                <div className="absolute w-16 h-16 bg-primary/30 rounded-full animate-pulse" />
               </div>
-              <Brain className="h-12 w-12 text-primary relative z-10 animate-pulse" />
+              <div className="p-3 rounded-full bg-primary/10 border border-primary/20">
+                <Brain className="h-10 w-10 text-primary relative z-10 animate-pulse" />
+              </div>
             </div>
 
             {/* Current Stage */}
-            <div className="w-full max-w-xs space-y-3">
+            <div className="w-full max-w-full md:max-w-md space-y-2.5">
               {RESEARCH_STAGES.map((stage, index) => {
                 const isActive = index === currentStage;
                 const isCompleted = index < currentStage;
@@ -331,24 +368,24 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
                   <div
                     key={stage.id}
                     className={`relative transition-all duration-300 ${
-                      isActive ? 'opacity-100' : isCompleted ? 'opacity-60' : 'opacity-40'
+                      isActive ? 'opacity-100' : isCompleted ? 'opacity-70' : 'opacity-50'
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className={`transition-all duration-300 ${
+                    <div className="flex items-center gap-2.5 mb-1.5">
+                      <div className={`flex-shrink-0 transition-all duration-300 ${
                         isCompleted
                           ? 'text-green-400'
                           : isActive
-                          ? 'text-primary animate-pulse'
+                          ? 'text-primary'
                           : 'text-muted-foreground'
                       }`}>
                         {isCompleted ? (
-                          <CheckCircle className="h-3 w-3" />
+                          <CheckCircle className="h-3.5 w-3.5" />
                         ) : (
-                          <stage.Icon className="h-3 w-3" />
+                          <stage.Icon className={`h-3.5 w-3.5 ${isActive ? 'animate-pulse' : ''}`} />
                         )}
                       </div>
-                      <span className={`text-[10px] font-medium transition-colors ${
+                      <span className={`text-xs font-medium transition-colors duration-200 flex-1 ${
                         isActive ? 'text-foreground' : 'text-muted-foreground'
                       }`}>
                         {stage.label}
@@ -357,7 +394,7 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
                     
                     {/* Progress Bar */}
                     {isCurrent && (
-                      <div className="w-full bg-background h-1 rounded-full overflow-hidden">
+                      <div className="w-full bg-background h-1 rounded-full overflow-hidden ml-6">
                         <div
                           className="h-full bg-primary transition-all duration-75 ease-out"
                           style={{ width: `${stageProgress}%` }}
@@ -366,7 +403,7 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
                     )}
                     
                     {isCompleted && (
-                      <div className="w-full bg-background h-1 rounded-full">
+                      <div className="w-full bg-background h-1 rounded-full ml-6">
                         <div className="h-full bg-green-400 w-full" />
                       </div>
                     )}
@@ -376,14 +413,14 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
             </div>
 
             {/* Overall Progress Indicator */}
-            <div className="w-full max-w-xs space-y-1">
-              <div className="flex items-center justify-between text-[9px] text-muted-foreground">
-                <span>Overall Progress</span>
-                <span>
-                  {Math.round(((currentStage + 1) / RESEARCH_STAGES.length) * 100)}%
+            <div className="w-full max-w-full md:max-w-md space-y-2 border-t border-border pt-4">
+              <div className="flex items-center justify-between text-xs ml-6">
+                <span className="text-muted-foreground font-medium">Overall Progress</span>
+                <span className="font-semibold text-foreground">
+                  {Math.round(((currentStage + stageProgress / 100) / RESEARCH_STAGES.length) * 100)}%
                 </span>
               </div>
-              <div className="w-full bg-background h-1.5 rounded-full overflow-hidden">
+              <div className="w-full bg-background h-2 rounded-full overflow-hidden ml-6">
                 <div
                   className="h-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-300"
                   style={{
@@ -394,11 +431,11 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
             </div>
 
             {/* Status Message */}
-            <div className="text-center">
-              <div className="text-xs font-medium text-foreground mb-1">
+            <div className="text-center pt-2">
+              <div className="text-xs font-semibold text-foreground mb-1">
                 {RESEARCH_STAGES[currentStage].label}
               </div>
-              <div className="text-[10px] text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 This may take a minute...
               </div>
             </div>
@@ -411,14 +448,14 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
             {/* Final Verdict */}
             <div className="border border-border bg-card p-2">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-medium text-muted-foreground">Final Verdict</span>
+                <span className="text-xs font-semibold text-muted-foreground">Final Verdict</span>
                 <div className={`flex items-center gap-1 ${getVerdictColor(researchResult.verdict)}`}>
                   {getVerdictIcon(researchResult.verdict)}
                   <span className="text-xs font-bold">{researchResult.verdict}</span>
                 </div>
               </div>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-muted-foreground">Confidence</span>
+                <span className="text-xs text-muted-foreground">Confidence</span>
                 <span className="text-xs font-semibold">
                   {(researchResult.confidence * 100).toFixed(1)}%
                 </span>
@@ -433,37 +470,37 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
 
             {/* Bayesian Probabilities */}
             <div className="border border-border bg-card p-2">
-              <div className="text-[10px] font-medium text-muted-foreground mb-1.5">Bayesian Probabilities</div>
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-green-400">YES</span>
-                  <span className="font-mono">{(researchResult.bayesianResult.probabilities.yes * 100).toFixed(1)}%</span>
+              <div className="text-xs font-semibold text-muted-foreground mb-2">Bayesian Probabilities</div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-green-400 font-medium">YES</span>
+                  <span className="font-mono font-semibold">{(researchResult.bayesianResult.probabilities.yes * 100).toFixed(1)}%</span>
                 </div>
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-yellow-400">UNCERTAIN</span>
-                  <span className="font-mono">{(researchResult.bayesianResult.probabilities.uncertain * 100).toFixed(1)}%</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-yellow-400 font-medium">UNCERTAIN</span>
+                  <span className="font-mono font-semibold">{(researchResult.bayesianResult.probabilities.uncertain * 100).toFixed(1)}%</span>
                 </div>
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-red-400">NO</span>
-                  <span className="font-mono">{(researchResult.bayesianResult.probabilities.no * 100).toFixed(1)}%</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-red-400 font-medium">NO</span>
+                  <span className="font-mono font-semibold">{(researchResult.bayesianResult.probabilities.no * 100).toFixed(1)}%</span>
                 </div>
               </div>
-              <div className="mt-1.5 pt-1.5 border-t border-border text-[10px] text-muted-foreground">
+              <div className="mt-2 pt-2 border-t border-border text-xs text-muted-foreground">
                 {researchResult.bayesianResult.explanation}
               </div>
             </div>
 
             {/* Analysis Summary */}
             <div className="border border-border bg-card p-2">
-              <div className="text-[10px] font-medium text-muted-foreground mb-1.5">Analysis Summary</div>
-              <div className="space-y-1.5">
-                <div className="text-[10px]">
+              <div className="text-xs font-semibold text-muted-foreground mb-2">Analysis Summary</div>
+              <div className="space-y-2">
+                <div className="text-xs">
                   <div className="font-medium mb-0.5">Aggregator Assessment:</div>
                   <div className="text-muted-foreground leading-relaxed">
                     {researchResult.analysisResult.aggregator.reasoning}
                   </div>
                 </div>
-                <div className="text-[10px]">
+                <div className="text-xs">
                   <div className="font-medium mb-0.5">Overall Confidence:</div>
                   <div className="text-muted-foreground">
                     {(researchResult.analysisResult.overallConfidence * 100).toFixed(1)}%
@@ -474,12 +511,12 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
 
             {/* Source Grades */}
             <div className="border border-border bg-card p-2">
-              <div className="text-[10px] font-medium text-muted-foreground mb-1.5">
+              <div className="text-xs font-semibold text-muted-foreground mb-2">
                 Source Grades ({researchResult.gradedSources.length} sources)
               </div>
-              <div className="space-y-1 max-h-32 overflow-y-auto">
+              <div className="space-y-2 max-h-32 overflow-y-auto">
                 {researchResult.gradedSources.slice(0, 5).map((gs, index) => (
-                  <div key={index} className="text-[10px]">
+                  <div key={index} className="text-xs">
                     <div className="flex items-center justify-between mb-0.5">
                       <span className={`font-semibold ${getGradeColor(gs.grade)}`}>
                         Grade {gs.grade}
@@ -488,15 +525,15 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
                         {gs.source.title}
                       </span>
                     </div>
-                    <div className="text-[9px] text-muted-foreground truncate">
+                    <div className="text-xs text-muted-foreground truncate">
                       {gs.source.domain || 'Unknown domain'}
                     </div>
-                    {gs.source.url && (
+                    {gs.source.url && isValidUrl(gs.source.url) && (
                       <a
                         href={gs.source.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[9px] text-primary hover:underline flex items-center gap-1 mt-0.5"
+                        className="text-xs text-primary hover:underline flex items-center gap-1 mt-1 transition-colors duration-200"
                       >
                         View Source
                         <ExternalLink className="h-2 w-2" />
@@ -544,19 +581,19 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
                 </button>
                 {showIntermediateResults && (
                   <div className="space-y-2 mt-2">
-                    <div className="text-[10px]">
+                    <div className="text-xs">
                       <div className="font-medium mb-1 text-green-400">Analyst Output:</div>
                       <div className="text-[9px] text-muted-foreground leading-relaxed max-h-20 overflow-y-auto bg-background p-1.5 rounded">
                         {intermediateResults.analystOutput || 'N/A'}
                       </div>
                     </div>
-                    <div className="text-[10px]">
+                    <div className="text-xs">
                       <div className="font-medium mb-1 text-blue-400">Critic Output:</div>
                       <div className="text-[9px] text-muted-foreground leading-relaxed max-h-20 overflow-y-auto bg-background p-1.5 rounded">
                         {intermediateResults.criticOutput || 'N/A'}
                       </div>
                     </div>
-                    <div className="text-[10px]">
+                    <div className="text-xs">
                       <div className="font-medium mb-1 text-purple-400">Aggregator Output:</div>
                       <div className="text-[9px] text-muted-foreground leading-relaxed max-h-20 overflow-y-auto bg-background p-1.5 rounded">
                         {intermediateResults.aggregatorOutput || 'N/A'}

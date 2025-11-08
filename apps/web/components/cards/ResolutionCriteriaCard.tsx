@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useMarketStore } from '@/stores/market-store';
 import { useMarket } from '@/lib/hooks/usePolymarketData';
 import { AlertCircle, CheckCircle2, ExternalLink, Clock, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { MarketSelector } from '@/components/MarketSelector';
 
 interface ResolutionCriteriaCardProps {
@@ -13,11 +13,10 @@ interface ResolutionCriteriaCardProps {
 }
 
 function ResolutionCriteriaCardComponent({ marketId: propMarketId, onMarketChange }: ResolutionCriteriaCardProps = {}) {
-  const { selectedMarketId } = useMarketStore();
-  // Use prop marketId if provided, otherwise fall back to selectedMarketId
-  const effectiveMarketId = propMarketId || selectedMarketId;
-  const { data: market, isLoading } = useMarket(effectiveMarketId);
+  // Use prop marketId only - don't fall back to global state to avoid shared state issues
+  const effectiveMarketId = propMarketId;
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  const { data: market, isLoading } = useMarket(effectiveMarketId);
 
   // Parse resolution source and criteria (move before early returns)
   const endDate = market?.endDate ? new Date(market.endDate) : null;
@@ -59,23 +58,23 @@ function ResolutionCriteriaCardComponent({ marketId: propMarketId, onMarketChang
   if (!effectiveMarketId) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center h-full gap-4 p-4 text-center">
-          <div className="text-muted-foreground text-sm mb-2">
-            Select a market to view resolution criteria
-          </div>
-          <Button
-            onClick={() => setShowMarketSelector(true)}
-            variant="outline"
-            size="sm"
-          >
-            <Search className="h-4 w-4 mr-2" />
-            Select Market
-          </Button>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="Select a market to view resolution criteria"
+          description="Use the search icon in the navbar to select a market"
+          action={{
+            label: 'Select Market',
+            onClick: () => setShowMarketSelector(true),
+          }}
+          className="p-4"
+        />
         <MarketSelector
           open={showMarketSelector}
           onOpenChange={setShowMarketSelector}
-          onSelect={handleSelect}
+          onSelect={(id) => {
+            if (onMarketChange) onMarketChange(id);
+            setShowMarketSelector(false);
+          }}
         />
       </>
     );
@@ -112,16 +111,15 @@ function ResolutionCriteriaCardComponent({ marketId: propMarketId, onMarketChang
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Compact Header */}
-      <div className="flex-shrink-0 p-2 border-b border-border">
-        <div className="text-xs font-semibold truncate mb-0.5">{market.question}</div>
-        <div className="text-[10px] text-muted-foreground">Resolution Intelligence</div>
+      <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-accent/20">
+        <div className="text-xs font-semibold text-foreground">Resolution Intelligence</div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {/* Resolution Risk Score - Prominent */}
         <div className="border border-border bg-card p-2">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-medium text-muted-foreground">Risk Score</span>
+            <span className="text-xs font-semibold text-muted-foreground">Risk Score</span>
             <span className={`text-xs font-bold ${getRiskColor(resolutionRiskScore)}`}>
               {resolutionRiskScore}/100
             </span>
@@ -138,7 +136,7 @@ function ResolutionCriteriaCardComponent({ marketId: propMarketId, onMarketChang
               style={{ width: `${resolutionRiskScore}%` }}
             />
           </div>
-          <div className="flex items-center justify-between text-[10px]">
+          <div className="flex items-center justify-between text-xs">
             <span className={getRiskColor(resolutionRiskScore)}>{getRiskLabel(resolutionRiskScore)}</span>
             {market.resolutionSource && market.resolutionSource.startsWith('http') && !market.resolutionCriteria && (
               <a
@@ -157,25 +155,25 @@ function ResolutionCriteriaCardComponent({ marketId: propMarketId, onMarketChang
         {/* Ambiguity Flags - Compact */}
         <div className="space-y-1">
           {!market.resolutionCriteria && !market.resolutionSource && (
-            <div className="flex items-center gap-1.5 text-[10px] text-yellow-400">
+            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
               <AlertCircle className="h-2.5 w-2.5 flex-shrink-0" />
               <span>No resolution source</span>
             </div>
           )}
           {timeUntilEnd !== null && timeUntilEnd < 24 * 60 * 60 * 1000 && !isExpired && (
-            <div className="flex items-center gap-1.5 text-[10px] text-yellow-400">
+            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
               <AlertCircle className="h-2.5 w-2.5 flex-shrink-0" />
               <span>Deadline approaching</span>
             </div>
           )}
           {isExpired && (
-            <div className="flex items-center gap-1.5 text-[10px] text-red-400">
+            <div className="flex items-center gap-1.5 text-xs text-red-400">
               <AlertCircle className="h-2.5 w-2.5 flex-shrink-0" />
               <span>Expired</span>
             </div>
           )}
           {resolutionRiskScore < 40 && (market.resolutionCriteria || market.resolutionSource) && (
-            <div className="flex items-center gap-1.5 text-[10px] text-green-400">
+            <div className="flex items-center gap-1.5 text-xs text-green-400">
               <CheckCircle2 className="h-2.5 w-2.5 flex-shrink-0" />
               <span>Low ambiguity risk</span>
             </div>
@@ -188,7 +186,7 @@ function ResolutionCriteriaCardComponent({ marketId: propMarketId, onMarketChang
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Clock className="h-2.5 w-2.5 text-muted-foreground flex-shrink-0" />
-                <span className="text-[10px] text-muted-foreground">Deadline</span>
+                <span className="text-xs text-muted-foreground">Deadline</span>
               </div>
               {timeUntilEnd !== null && (
                 <span

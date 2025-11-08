@@ -3,18 +3,24 @@
 import React, { useState } from 'react';
 import { useMarketStore } from '@/stores/market-store';
 import { useMarketPrice } from '@/lib/hooks/usePolymarketData';
+import { useRealtimePrice } from '@/lib/hooks/useRealtimePrice';
 import { useTrading } from '@/lib/hooks/useTrading';
 import { parseUnits } from 'viem';
-import { Loader2, ArrowUp, ArrowDown, Search } from 'lucide-react';
+import { Loader2, ArrowUp, ArrowDown, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MarketSelector } from '@/components/MarketSelector';
+import { useToast } from '@/components/Toast';
 
 function OrderCreatorCardComponent() {
   const { selectedMarketId, getMarket } = useMarketStore();
   const { data: price, isLoading } = useMarketPrice(selectedMarketId);
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  
+  // Subscribe to real-time price updates for instant updates
+  useRealtimePrice(selectedMarketId || null, 'YES');
 
   const [orderType, setOrderType] = useState<'buy' | 'sell'>('buy');
   const [orderMode, setOrderMode] = useState<'market' | 'limit'>('limit');
@@ -26,6 +32,7 @@ function OrderCreatorCardComponent() {
 
   // Hooks must be called unconditionally - before any early returns
   const { buy, sell } = useTrading();
+  const { error: showErrorToast } = useToast();
 
   if (!selectedMarketId) {
     return (
@@ -103,10 +110,22 @@ function OrderCreatorCardComponent() {
         setTargetProbability('');
         setSize('');
       } else {
-        setLastResult(`Error: ${result.error || 'Unknown error'}`);
+        const errorMessage = result.error || 'Unknown error';
+        setLastResult(`Error: ${errorMessage}`);
+        // Show toast notification for balance errors
+        if (errorMessage.includes('Insufficient') || errorMessage.includes('balance')) {
+          showErrorToast('Insufficient Balance', errorMessage);
+        } else {
+          showErrorToast('Transaction Failed', errorMessage);
+        }
       }
     } catch (error: any) {
-      setLastResult(`Error: ${error.message || 'Unknown error'}`);
+      const errorMessage = error.message || 'Unknown error';
+      setLastResult(`Error: ${errorMessage}`);
+      // Show toast notification for balance errors
+      if (errorMessage.includes('Insufficient') || errorMessage.includes('balance')) {
+        showErrorToast('Insufficient Balance', errorMessage);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -139,162 +158,177 @@ function OrderCreatorCardComponent() {
 
   const impact = calculateImpact();
 
+  const [showLimitSettings, setShowLimitSettings] = useState(false);
+
   return (
-    <div className="h-full flex flex-col p-3 space-y-3 overflow-y-auto">
-      {/* Market Info */}
-      <div className="text-xs flex-shrink-0 border-b border-border pb-2">
-        <div className="font-medium truncate">{market?.question || 'Market'}</div>
-        <div className="text-muted-foreground mt-0.5">
-          Current: {currentProbability.toFixed(1)}%
+    <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">
+      {/* Market Info Header */}
+      <div className="flex-shrink-0 space-y-1">
+        <div className="text-xs font-semibold text-foreground truncate">{market?.question || 'Market'}</div>
+        <div className="text-xs text-muted-foreground">
+          Current: <span className="font-mono font-semibold text-foreground">{currentProbability.toFixed(1)}%</span>
         </div>
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center flex-1">
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <LoadingSpinner size="sm" text="Loading market data..." />
         </div>
       ) : (
-        <div className="flex flex-col space-y-3 flex-1 min-h-0">
-          {/* Order Type (Buy/Sell) */}
-          <div className="flex gap-2 flex-shrink-0">
-            <Button
-              variant={orderType === 'buy' ? 'default' : 'outline'}
-              size="sm"
-              className={`flex-1 text-xs ${
-                orderType === 'buy'
-                  ? 'bg-green-600 hover:bg-green-700 text-white border-green-600'
-                  : 'border-green-600/50 text-green-400 hover:bg-green-600/10'
-              }`}
+        <div className="flex flex-col space-y-4 flex-1 min-h-0">
+          {/* Order Type (Buy/Sell) - Segmented Control */}
+          <div className="flex gap-1.5 p-1 bg-muted/30 rounded-lg flex-shrink-0">
+            <button
               onClick={() => setOrderType('buy')}
+              className={`flex-1 px-3 py-2 text-xs font-semibold rounded transition-all duration-200 ${
+                orderType === 'buy'
+                  ? 'bg-green-500 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
               Buy
-            </Button>
-            <Button
-              variant={orderType === 'sell' ? 'default' : 'outline'}
-              size="sm"
-              className={`flex-1 text-xs ${
-                orderType === 'sell'
-                  ? 'bg-red-600 hover:bg-red-700 text-white border-red-600'
-                  : 'border-red-600/50 text-red-400 hover:bg-red-600/10'
-              }`}
+            </button>
+            <button
               onClick={() => setOrderType('sell')}
+              className={`flex-1 px-3 py-2 text-xs font-semibold rounded transition-all duration-200 ${
+                orderType === 'sell'
+                  ? 'bg-red-500 text-white shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
               Sell
-            </Button>
+            </button>
           </div>
 
-          {/* Order Mode (Market/Limit) */}
-          <div className="flex gap-2 flex-shrink-0">
-            <Button
-              variant={orderMode === 'market' ? 'default' : 'outline'}
-              size="sm"
-              className="flex-1 text-xs"
-              onClick={() => setOrderMode('market')}
+          {/* Order Mode Toggle */}
+          <div className="flex-shrink-0">
+            <button
+              onClick={() => {
+                if (orderMode === 'market') {
+                  setOrderMode('limit');
+                  setShowLimitSettings(true);
+                } else {
+                  setOrderMode('market');
+                  setShowLimitSettings(false);
+                }
+              }}
+              className={`w-full px-3 py-2.5 text-xs font-semibold rounded-lg border transition-all duration-200 flex items-center justify-between ${
+                orderMode === 'market'
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background border-border hover:border-primary/50'
+              }`}
             >
-              Market
-            </Button>
-            <Button
-              variant={orderMode === 'limit' ? 'default' : 'outline'}
-              size="sm"
-              className="flex-1 text-xs"
-              onClick={() => setOrderMode('limit')}
-            >
-              Limit
-            </Button>
+              <span>{orderMode === 'market' ? 'Market Order' : 'Limit Order'}</span>
+              {orderMode === 'limit' ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </button>
           </div>
 
-          {/* Target Probability (only show for Limit orders) */}
-          {orderMode === 'limit' && (
-            <div className="space-y-1 flex-shrink-0">
-              <Label className="text-xs">
-                {orderType === 'buy' ? 'Buy at' : 'Sell at'} Probability (%)
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  value={targetProbability}
-                  onChange={(e) => setTargetProbability(e.target.value)}
-                  className="flex-1 text-sm font-mono"
-                  placeholder={currentProbability.toFixed(1)}
-                />
-                <div className="flex flex-col gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => nudgePrice('up', 0.1)}
-                    className="p-1 hover:bg-accent rounded"
-                    title="Nudge +0.1%"
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => nudgePrice('down', 0.1)}
-                    className="p-1 hover:bg-accent rounded"
-                    title="Nudge -0.1%"
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </button>
+          {/* Limit Settings (Collapsible) */}
+          {orderMode === 'limit' && showLimitSettings && (
+            <div className="space-y-3 flex-shrink-0 p-3 rounded-lg border border-border/50 bg-muted/20">
+              {/* Target Probability */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-foreground">
+                  {orderType === 'buy' ? 'Buy at' : 'Sell at'} Probability (%)
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={targetProbability}
+                    onChange={(e) => setTargetProbability(e.target.value)}
+                    className="flex-1 text-sm font-mono bg-background"
+                    placeholder={currentProbability.toFixed(1)}
+                  />
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => nudgePrice('up', 0.1)}
+                      className="p-1.5 hover:bg-accent rounded border border-border/50 transition-colors bg-background"
+                      title="Nudge +0.1%"
+                    >
+                      <ArrowUp className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => nudgePrice('down', 0.1)}
+                      className="p-1.5 hover:bg-accent rounded border border-border/50 transition-colors bg-background"
+                      title="Nudge -0.1%"
+                    >
+                      <ArrowDown className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
+
+              {/* Impact Estimator */}
+              {impact && (
+                <div className="space-y-0 border border-border/30 rounded overflow-hidden text-xs bg-background/50">
+                  <div className="px-3 py-2 border-b border-border/30 bg-muted/30">
+                    <div className="font-semibold text-foreground text-xs">Impact Estimate</div>
+                  </div>
+                  <div className="space-y-0">
+                    <div className="flex items-center justify-between py-2 px-3 border-b border-border/30">
+                      <span className="text-muted-foreground font-medium text-xs">Slippage:</span>
+                      <span className="font-mono font-semibold text-foreground text-xs">{impact.impact}%</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 px-3 border-b border-border/30">
+                      <span className="text-muted-foreground font-medium text-xs">Blended Price:</span>
+                      <span className="font-mono font-semibold text-foreground text-xs">{impact.blendedPrice}%</span>
+                    </div>
+                    <div className="flex items-center justify-between py-2 px-3">
+                      <span className="text-muted-foreground font-medium text-xs">Fill Probability:</span>
+                      <span className="font-mono font-semibold text-foreground text-xs">{impact.fillProbability}%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Market order info */}
           {orderMode === 'market' && (
-            <div className="p-2 bg-muted rounded text-xs flex-shrink-0">
-              <div className="text-muted-foreground">
-                Market order will execute at current price: {currentProbability.toFixed(1)}%
+            <div className="p-3 rounded-lg border border-border/50 text-xs flex-shrink-0 bg-muted/20">
+              <div className="text-muted-foreground font-medium text-xs">
+                Executes at current price: <span className="font-mono font-semibold text-foreground">{currentProbability.toFixed(1)}%</span>
               </div>
             </div>
           )}
 
-          {/* Size Type */}
-          <div className="space-y-1 flex-shrink-0">
-            <Label className="text-xs">Size by</Label>
-            <select
-              value={sizeBy}
-              onChange={(e) => setSizeBy(e.target.value as any)}
-              className="w-full px-2 py-1.5 text-xs border border-border rounded bg-background"
-            >
-              <option value="usdc">USDC</option>
-              <option value="risk">Risk %</option>
-              <option value="bankroll">Bankroll %</option>
-            </select>
-          </div>
-
-          {/* Size Input */}
-          <div className="space-y-1 flex-shrink-0">
-            <Label className="text-xs">
-              Size ({sizeBy === 'usdc' ? 'USDC' : sizeBy === 'risk' ? 'Risk %' : 'Bankroll %'})
-            </Label>
-            <Input
-              type="number"
-              value={size}
-              onChange={(e) => setSize(e.target.value)}
-              className="text-sm font-mono"
-              placeholder="0"
-            />
-          </div>
-
-          {/* Impact Estimator (only for Limit orders) */}
-          {orderMode === 'limit' && impact && (
-            <div className="p-2 bg-muted rounded text-xs space-y-1 flex-shrink-0">
-              <div className="font-medium">Impact Estimate</div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Slippage:</span>
-                <span className="font-mono">{impact.impact}%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Blended Price:</span>
-                <span className="font-mono">{impact.blendedPrice}%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Fill Probability:</span>
-                <span className="font-mono">{impact.fillProbability}%</span>
-              </div>
+          {/* Size Configuration */}
+          <div className="space-y-3 flex-shrink-0">
+            {/* Size Type */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Size by</Label>
+              <select
+                value={sizeBy}
+                onChange={(e) => setSizeBy(e.target.value as any)}
+                className="w-full px-3 py-2 text-xs border border-border/50 rounded-lg bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-all duration-200"
+              >
+                <option value="usdc">USDC</option>
+                <option value="risk">Risk %</option>
+                <option value="bankroll">Bankroll %</option>
+              </select>
             </div>
-          )}
+
+            {/* Size Input */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">
+                Size ({sizeBy === 'usdc' ? 'USDC' : sizeBy === 'risk' ? 'Risk %' : 'Bankroll %'})
+              </Label>
+              <Input
+                type="number"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                className="text-sm font-mono bg-background"
+                placeholder="0"
+              />
+            </div>
+          </div>
 
           {/* Spacer to push buttons to bottom */}
           <div className="flex-1 min-h-0" />
@@ -302,11 +336,8 @@ function OrderCreatorCardComponent() {
           {/* Submit Button */}
           <Button
             onClick={handleSubmit}
-            className={`w-full flex-shrink-0 ${
-              orderType === 'buy'
-                ? 'bg-green-600 hover:bg-green-700 text-white'
-                : 'bg-red-600 hover:bg-red-700 text-white'
-            }`}
+            variant={orderType === 'buy' ? 'buy' : 'sell'}
+            className="w-full flex-shrink-0 text-xs font-semibold h-10"
             disabled={
               (orderMode === 'limit' && !targetProbability) || 
               !size || 
@@ -332,10 +363,10 @@ function OrderCreatorCardComponent() {
           {/* Result Message */}
           {lastResult && (
             <div
-              className={`text-xs p-2 rounded flex-shrink-0 ${
+              className={`text-xs p-3 rounded-lg flex-shrink-0 border ${
                 lastResult.includes('Success')
-                  ? 'bg-green-500/10 text-green-400'
-                  : 'bg-red-500/10 text-red-400'
+                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                  : 'bg-red-500/10 text-red-400 border-red-500/20'
               }`}
             >
               {lastResult}

@@ -1,10 +1,345 @@
 /**
  * Multi-agent analysis system using OpenAI Agents SDK
- * Implements analyst → critic → aggregator loop
+ * Implements research → analyst → critic → aggregator loop
  */
 
 import { Agent, run, setDefaultOpenAIKey } from '@openai/agents';
-import { GradedSource, AnalysisResult, AgentAnalysis, Market } from './types';
+import { GradedSource, AnalysisResult, AgentAnalysis, Market, ValyuResult, ResearchStrategy } from './types';
+
+/**
+ * Event context for multi-option events
+ */
+export interface EventContext {
+  eventTitle: string;
+  allMarkets: Market[];
+  analyzedMarketId: string;
+}
+
+/**
+ * Run research agent to gather information about the market
+ */
+export async function runResearchAgent(
+  market: Market,
+  researchStrategy: ResearchStrategy,
+  eventContext?: EventContext
+): Promise<ValyuResult[]> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY environment variable is not set');
+  }
+
+  // Verify API key format
+  if (!apiKey.startsWith('sk-')) {
+    throw new Error('Invalid OPENAI_API_KEY format. API key should start with "sk-"');
+  }
+
+  // Set the OpenAI API key for the SDK
+  try {
+    setDefaultOpenAIKey(apiKey);
+  } catch (error) {
+    console.error('[Research Agent] Failed to set OpenAI API key:', error);
+    throw new Error('Failed to configure OpenAI API key');
+  }
+
+  // Build instructions based on whether this is a multi-option event
+  let instructions: string;
+  
+  // Get current year for time-sensitive queries
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  const isSportsCategory = market.category?.toLowerCase().includes('sports');
+  
+  if (eventContext && eventContext.allMarkets.length > 1) {
+    // Multi-option event: include ALL options dynamically
+    const allOptionsList = eventContext.allMarkets.map((m, index) => {
+      const isAnalyzed = m.id === market.id;
+      return `- Option ${index + 1}: ${m.question}${isAnalyzed ? ' (THIS IS THE ONE BEING ANALYZED)' : ''}`;
+    }).join('\n');
+
+    const otherOptionsList = eventContext.allMarkets
+      .filter(m => m.id !== market.id)
+      .map(m => m.question)
+      .join(', ');
+
+    instructions = `You are a research agent specializing in prediction markets. This market is part of an event with multiple options.
+
+${isSportsCategory ? `**CRITICAL FOR SPORTS MARKETS**: Focus on the MOST RECENT information available:
+- Current ${currentYear} season standings, results, and performance
+- Latest news from the past few weeks/months
+- Recent race results, wins, points, and current form
+- Current driver/team performance and momentum
+- Breaking news and recent developments
+- Upcoming races and schedule
+
+Prioritize information from ${currentYear} and recent months over historical data.` : ''}
+
+Event Question: ${eventContext.eventTitle}
+All Options in Event (dynamically list ALL ${eventContext.allMarkets.length} options):
+${allOptionsList}
+
+Total Options: ${eventContext.allMarkets.length}
+Option Being Analyzed: ${market.question}
+
+Your task:
+1. Focus your research on "${market.question}" - the specific option being analyzed
+2. However, understand that "${market.question}" is competing against ALL ${eventContext.allMarkets.length - 1} other options: ${otherOptionsList}
+3. Research "${market.question}" in the competitive context of this event
+4. Compare "${market.question}"'s likelihood against ALL other options in the event
+5. Understand the full competitive landscape - there are ${eventContext.allMarkets.length} total options
+6. Generate comprehensive research content that helps assess "${market.question}"'s probability relative to ALL competitors
+
+Research Strategy:
+- Key Information Needed: ${researchStrategy.keyInformationNeeded.join(', ')}
+- Search Queries: ${researchStrategy.searchQueries.join(', ')}
+- Important Factors: ${researchStrategy.importantFactors.join(', ')}
+- Timeline: ${researchStrategy.timelineConsiderations}
+
+Generate research content as multiple sources (at least 5-7 sources) covering:
+- **CURRENT NEWS AND RECENT INFORMATION** (PRIORITY): Latest news, recent developments, current standings, recent results, current form
+- Current status of "${market.question}"
+- Recent developments affecting "${market.question}"
+- Competitive position vs ALL other options in the event
+- Expert opinions and analysis comparing "${market.question}" to all competitors
+- Historical context and precedents
+- Relative strengths and weaknesses compared to each competitor
+
+CRITICAL: Prioritize the MOST RECENT information available. For sports markets, include:
+- Current season standings and recent performance
+- Latest news articles and recent developments
+- Recent wins, losses, and results
+- Current form and momentum
+- Upcoming fixtures and schedule
+- Any breaking news or recent changes
+
+Format your response as a structured list of research sources, each with:
+- Title: [Source title]
+- URL: [Actual URL if available - must be a real HTTP/HTTPS URL, not a placeholder]
+- Content: [Comprehensive research content]
+- Published Date: [Date if relevant]
+- Domain: [Source domain if relevant]
+
+IMPORTANT: Only include URLs that are actual web addresses (http:// or https://). If you reference sources, include their actual URLs. Do not create placeholder URLs like "research-1" or "source-1".`;
+  } else {
+    // Single-option market
+    instructions = `You are a research agent specializing in prediction markets. Research the following market question:
+
+Market Question: ${market.question}
+
+${isSportsCategory ? `**CRITICAL FOR SPORTS MARKETS**: Focus on the MOST RECENT information available:
+- Current ${currentYear} season standings, results, and performance
+- Latest news from the past few weeks/months
+- Recent race results, wins, points, and current form
+- Current driver/team performance and momentum
+- Breaking news and recent developments
+- Upcoming races and schedule
+
+Prioritize information from ${currentYear} and recent months over historical data.` : ''}
+
+Research Strategy:
+- Key Information Needed: ${researchStrategy.keyInformationNeeded.join(', ')}
+- Search Queries: ${researchStrategy.searchQueries.join(', ')}
+- Important Factors: ${researchStrategy.importantFactors.join(', ')}
+- Timeline: ${researchStrategy.timelineConsiderations}
+
+Generate comprehensive research content as multiple sources (at least 5-7 sources) covering:
+- **CURRENT NEWS AND RECENT INFORMATION** (PRIORITY): Latest news, recent developments, current standings, recent results, current form
+- Current status and recent developments
+- Expert opinions and analysis
+- Historical context and precedents
+- Key factors affecting the outcome
+
+CRITICAL: Prioritize the MOST RECENT information available. Include:
+- Latest news articles and recent developments
+- Current standings, rankings, or metrics
+- Recent results, wins, losses, or changes
+- Current form, momentum, or trends
+- Breaking news or recent announcements
+- Upcoming events or deadlines
+
+Format your response as a structured list of research sources, each with:
+- Title: [Source title]
+- URL: [Actual URL if available - must be a real HTTP/HTTPS URL, not a placeholder]
+- Content: [Comprehensive research content]
+- Published Date: [Date if relevant]
+- Domain: [Source domain if relevant]
+
+IMPORTANT: Only include URLs that are actual web addresses (http:// or https://). If you reference sources, include their actual URLs. Do not create placeholder URLs like "research-1" or "source-1".`;
+  }
+
+  // Create Research Agent
+  const researchAgent = new Agent({
+    name: 'Research',
+    instructions,
+    model: 'gpt-4o',
+  });
+
+  try {
+    console.log('[Research Agent] Starting research...');
+    const prompt = `Research the market question and generate comprehensive research content.`;
+    const result = await run(researchAgent, prompt);
+    const output = result.finalOutput || '';
+    console.log('[Research Agent] Research completed');
+
+    // Parse the output to extract research sources
+    // The agent should return structured sources
+    const sources = parseResearchOutput(output, market);
+
+    return sources;
+  } catch (error) {
+    console.error('[Research Agent] Error:', error);
+    
+    if (error instanceof Error && (error.message.includes('Unauthorized') || error.message.includes('401'))) {
+      throw new Error('OpenAI API authentication failed. Please check your OPENAI_API_KEY environment variable.');
+    }
+    
+    throw new Error(`Research agent failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Extract URLs from text content
+ */
+function extractUrls(text: string): string[] {
+  const urlRegex = /(https?:\/\/[^\s\)]+)/gi;
+  const matches = text.match(urlRegex);
+  return matches ? [...new Set(matches)] : [];
+}
+
+/**
+ * Extract domain from URL
+ */
+function extractDomain(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./, '');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Parse research agent output into ValyuResult array
+ */
+function parseResearchOutput(output: string, market: Market): ValyuResult[] {
+  const sources: ValyuResult[] = [];
+  
+  // Try to parse structured format (Title:, URL:, Content:, etc.)
+  const sourceBlocks = output.split(/(?=Title:|Source \d+:|#)/i);
+  
+  for (const block of sourceBlocks) {
+    if (!block.trim()) continue;
+    
+    const titleMatch = block.match(/Title:\s*(.+?)(?:\n|$)/i) || block.match(/#\s*(.+?)(?:\n|$)/);
+    const urlMatch = block.match(/URL:\s*(.+?)(?:\n|$)/i);
+    const contentMatch = block.match(/Content:\s*([\s\S]+?)(?:\n(?:Published|Domain|Title|URL|Source|#)|$)/i);
+    const dateMatch = block.match(/Published Date:\s*(.+?)(?:\n|$)/i);
+    const domainMatch = block.match(/Domain:\s*(.+?)(?:\n|$)/i);
+    
+    const title = titleMatch?.[1]?.trim() || 'Research Source';
+    let url = urlMatch?.[1]?.trim();
+    const content = contentMatch?.[1]?.trim() || block.trim();
+    let publishedDate = dateMatch?.[1]?.trim();
+    let domain = domainMatch?.[1]?.trim();
+    
+    // If no URL provided, try to extract from content
+    if (!url || !isValidUrl(url)) {
+      const extractedUrls = extractUrls(content);
+      if (extractedUrls.length > 0) {
+        url = extractedUrls[0]; // Use first valid URL found
+        if (!domain) {
+          domain = extractDomain(url);
+        }
+      }
+    }
+    
+    // Validate URL - only use if it's a valid HTTP/HTTPS URL
+    if (!url || !isValidUrl(url)) {
+      // Skip this source if no valid URL (don't create placeholder URLs)
+      continue;
+    }
+    
+    // Extract domain from URL if not provided
+    if (!domain) {
+      domain = extractDomain(url);
+    }
+    
+    if (content && content.length > 50) {
+      sources.push({
+        title,
+        url,
+        content,
+        publishedDate,
+        domain,
+      });
+    }
+  }
+  
+  // If parsing didn't work well, try to extract URLs from the entire output
+  if (sources.length < 3) {
+    const allUrls = extractUrls(output);
+    if (allUrls.length > 0) {
+      // Group content by URLs found
+      const sections = output.split(/\n\n+/).filter(s => s.trim().length > 100);
+      sections.forEach((section, index) => {
+        if (section.trim().length > 100) {
+          const sectionUrls = extractUrls(section);
+          const url = sectionUrls.length > 0 ? sectionUrls[0] : (index < allUrls.length ? allUrls[index] : null);
+          
+          if (url && isValidUrl(url)) {
+            sources.push({
+              title: `Research Source ${sources.length + 1}`,
+              url,
+              content: section.trim(),
+              publishedDate: new Date().toISOString(),
+              domain: extractDomain(url),
+            });
+          }
+        }
+      });
+    }
+  }
+  
+  // If still not enough sources with valid URLs, try to extract from chunks
+  if (sources.length < 5) {
+    const allUrls = extractUrls(output);
+    if (allUrls.length > 0) {
+      // Split the output into chunks and try to match with URLs
+      const chunkSize = Math.ceil(output.length / Math.max(5, allUrls.length));
+      for (let i = 0; i < Math.min(10, allUrls.length); i++) {
+        const start = i * chunkSize;
+        const end = start + chunkSize;
+        const chunk = output.slice(start, end).trim();
+        
+        if (chunk.length > 100) {
+          const url = allUrls[i];
+          if (url && isValidUrl(url)) {
+            sources.push({
+              title: `Research Source ${sources.length + 1}`,
+              url,
+              content: chunk,
+              publishedDate: new Date().toISOString(),
+              domain: extractDomain(url),
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  return sources.slice(0, 10); // Limit to 10 sources max
+}
+
+/**
+ * Check if a string is a valid HTTP/HTTPS URL
+ */
+function isValidUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Run multi-agent analysis on market with graded sources

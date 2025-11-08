@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useTrades } from '@/lib/hooks/usePolymarketData';
+import { useRealtimeTrades } from '@/lib/hooks/useRealtimeTrades';
 import { useMarketStore } from '@/stores/market-store';
 import { AlertTriangle, TrendingUp, TrendingDown, Search } from 'lucide-react';
 import { onChainService } from '@/lib/api/onchain';
@@ -19,6 +20,10 @@ interface UnusualActivity {
 function ActivityScannerCardComponent() {
   const { markets, selectedMarketId } = useMarketStore();
   const { data: trades = [] } = useTrades(selectedMarketId);
+  
+  // Subscribe to real-time trade updates for instant activity detection
+  useRealtimeTrades(selectedMarketId);
+  
   const [activities, setActivities] = useState<UnusualActivity[]>([]);
 
   // Memoize trades key to prevent unnecessary recalculations
@@ -169,17 +174,17 @@ function ActivityScannerCardComponent() {
                     <div className="font-medium capitalize mb-1">
                       {activity.type.replace('-', ' ')}
                     </div>
-                    <div className="text-[10px] truncate mb-1">
+                    <div className="text-xs truncate mb-1">
                       {market?.question || activity.marketId}
                     </div>
-                    <div className="text-[10px] opacity-80">
+                    <div className="text-xs opacity-80">
                       {activity.message}
                     </div>
-                    <div className="text-[10px] opacity-60 mt-1">
+                    <div className="text-xs opacity-60 mt-1">
                       {new Date(activity.timestamp).toLocaleTimeString()}
                     </div>
                   </div>
-                  <div className="text-[10px] font-medium capitalize">
+                  <div className="text-xs font-medium capitalize">
                     {activity.severity}
                   </div>
                 </div>
@@ -190,7 +195,7 @@ function ActivityScannerCardComponent() {
       </div>
 
       {activities.length > 0 && (
-        <div className="mt-2 text-[10px] text-muted-foreground">
+        <div className="mt-2 text-xs text-muted-foreground">
           {activities.length} alert{activities.length !== 1 ? 's' : ''} detected
         </div>
       )}

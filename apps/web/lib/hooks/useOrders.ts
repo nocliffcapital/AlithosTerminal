@@ -70,8 +70,8 @@ export function useOrders(params?: OrderHistoryParams) {
       };
     },
     enabled: !!walletAddress,
-    staleTime: 10000, // 10 seconds
-    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 5 * 60 * 1000, // 5 minutes - real-time updates handle most changes
+    refetchInterval: 5 * 60 * 1000, // 5 minutes - real-time updates handle most changes, polling is fallback only
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)
   });
 }

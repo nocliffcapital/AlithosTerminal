@@ -8,6 +8,7 @@ import { usePrivy } from '@privy-io/react-auth';
 import { Loader2, Shield, AlertCircle, Search, TrendingUp } from 'lucide-react';
 import { LightweightDepthChart } from '@/components/charts/LightweightDepthChart';
 import { Button } from '@/components/ui/button';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Address } from 'viem';
 import { MarketSelector } from '@/components/MarketSelector';
 import { calculateLiquidityMetrics, calculateCommonImpactSizes } from '@/lib/utils/liquidity-metrics';
@@ -120,7 +121,7 @@ function DepthCardComponent() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <LoadingSpinner size="sm" text="Loading order book..." />
       </div>
     );
   }
@@ -187,7 +188,7 @@ function DepthCardComponent() {
   };
 
   return (
-    <div className="h-full flex flex-col p-2">
+    <div className="h-full flex flex-col p-3">
       <div className="mb-2 text-xs">
         <div className="font-medium">Market Depth</div>
         <div className="text-muted-foreground">Mid: ${metrics.midPrice.toFixed(4)}</div>

@@ -5,6 +5,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ToastContainer } from '@/components/Toast';
+import { useRealtimeConnection } from '@/lib/hooks/useRealtimeConnection';
+
+function RealtimeConnectionProvider({ children }: { children: React.ReactNode }) {
+  // Initialize real-time connection globally
+  useRealtimeConnection();
+  return <>{children}</>;
+}
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -81,13 +88,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
             createOnLogin: 'users-without-wallets',
           },
         }}
-        onError={(error) => {
-          console.error('[PrivyProvider] Error:', error);
-        }}
       >
         <QueryClientProvider client={queryClient}>
-          {children}
-          <ToastContainer />
+          <RealtimeConnectionProvider>
+            {children}
+            <ToastContainer />
+          </RealtimeConnectionProvider>
         </QueryClientProvider>
       </PrivyProvider>
     </ErrorBoundary>

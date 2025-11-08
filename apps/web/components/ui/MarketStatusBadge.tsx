@@ -94,11 +94,14 @@ export function MarketStatusBadge({
   const Icon = status.icon;
 
   return (
-    <div className={cn('flex items-center gap-1.5', className)}>
+    <div className={cn('flex items-center gap-2', className)}>
       <div className={cn(
-        'flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium',
+        'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border',
         status.bg,
-        status.color
+        status.color,
+        isExpired || !active || archived
+          ? 'border-red-500/20'
+          : 'border-green-500/20'
       )}>
         <Icon className="h-3 w-3" />
         <span>{status.label}</span>
@@ -106,12 +109,12 @@ export function MarketStatusBadge({
       
       {endDate && timeRemaining !== null && !archived && (
         <div className={cn(
-          'flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono',
+          'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono border',
           isExpired 
-            ? 'bg-red-500/10 text-red-400' 
+            ? 'bg-red-500/10 text-red-400 border-red-500/20' 
             : timeRemaining < 24 * 60 * 60 * 1000
-            ? 'bg-yellow-500/10 text-yellow-400'
-            : 'bg-muted/50 text-muted-foreground'
+            ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+            : 'bg-transparent text-foreground border-border/50'
         )}>
           <Clock className="h-3 w-3" />
           <span>{formatCountdown(timeRemaining)}</span>

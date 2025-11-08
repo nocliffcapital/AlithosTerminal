@@ -22,6 +22,7 @@ export const cardCategories: Record<CardCategory, CardTypeInfo[]> = {
     { type: 'quick-ticket', label: 'Quick Ticket', category: 'Trading' },
     { type: 'order-creator', label: 'Order Creator', category: 'Trading' },
     { type: 'orderbook', label: 'Order Book', category: 'Trading' },
+    { type: 'market-trade', label: 'Market Trade', category: 'Trading' },
     { type: 'positions', label: 'Positions & P&L', category: 'Trading' },
     { type: 'order-history', label: 'Order History', category: 'Trading' },
     { type: 'transaction-history', label: 'Transaction History', category: 'Trading' },
@@ -47,16 +48,13 @@ export const cardCategories: Record<CardCategory, CardTypeInfo[]> = {
     { type: 'scenario-builder', label: 'Scenario Builder', category: 'Risk Management' },
     { type: 'price-converter', label: 'Price Converter', category: 'Risk Management' },
   ],
-  'Automation': [
-    { type: 'alerts', label: 'Alerts & Automation', category: 'Automation' },
-  ],
+  'Automation': [],
   'Team': [
     { type: 'team-management', label: 'Team Management', category: 'Team' },
   ],
   'Utilities': [
     { type: 'journal', label: 'Journal', category: 'Utilities' },
     { type: 'comments', label: 'Comments', category: 'Utilities' },
-    { type: 'theme-editor', label: 'Theme Editor', category: 'Utilities' },
   ],
 };
 

@@ -122,7 +122,9 @@ See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) for current feature s
 ✅ **Alerts & Automation**:
 - Multi-signal alerts
 - Browser notifications
+- Email notifications
 - Webhook support
+- Telegram notifications
 
 ## Environment Variables
 
@@ -136,6 +138,9 @@ Optional:
 - `NEXT_PUBLIC_POLYMARKET_WS_URL` - Polymarket WebSocket URL (defaults to wss://api.claystack.com/polymarket/ws)
 - `NEXT_PUBLIC_ALCHEMY_API_URL` - Alchemy API (for on-chain data)
 - `NEXT_PUBLIC_MORALIS_API_URL` - Moralis API (alternative)
+- `GROK_API_KEY` - Grok API (xAI) key for AI market research (see [SETUP.md](./SETUP.md))
+- `OPENAI_API_KEY` - OpenAI API key for multi-agent analysis (see [SETUP.md](./SETUP.md))
+- `TELEGRAM_BOT_TOKEN` - Telegram bot token for Telegram notifications (see [SETUP.md](./SETUP.md))
 
 See `.env.local` template in `apps/web/` for all variables.
 

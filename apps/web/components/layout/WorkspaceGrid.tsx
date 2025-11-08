@@ -35,6 +35,8 @@ export function WorkspaceGrid() {
   const gridRef = useRef<HTMLDivElement>(null);
   const [maxRows, setMaxRows] = useState<number | null>(null);
   const isResizingRef = useRef(false); // Track if we're currently resizing
+  const isDraggingRef = useRef(false); // Track if we're currently dragging (CRITICAL: prevents card revert bug)
+  const lastMaxRowsRef = useRef<number | null>(null); // Track last calculated value to prevent infinite loops
   
   const currentWorkspace = useMemo(
     () => workspaces.find((w: any) => w.id === currentWorkspaceId),
@@ -56,6 +58,8 @@ export function WorkspaceGrid() {
 
   // Calculate maximum rows that fit in viewport
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     const calculateMaxRows = () => {
       if (!gridRef.current) return;
       
@@ -70,20 +74,37 @@ export function WorkspaceGrid() {
       const availableHeight = containerHeight - (containerPadding[1] * 2);
       
       // Calculate max rows: (availableHeight) / (rowHeight + vertical margin)
-      const calculatedMaxRows = Math.floor(availableHeight / (rowHeight + margin[1]));
+      const calculatedMaxRows = Math.max(Math.floor(availableHeight / (rowHeight + margin[1])), 5); // Minimum 5 rows
       
-      setMaxRows(Math.max(calculatedMaxRows, 5)); // Minimum 5 rows
+      // Only update if the value actually changed to prevent infinite loops
+      if (calculatedMaxRows !== lastMaxRowsRef.current) {
+        lastMaxRowsRef.current = calculatedMaxRows;
+        setMaxRows(calculatedMaxRows);
+      }
+    };
+
+    // Debounced version for ResizeObserver to prevent excessive updates
+    const debouncedCalculateMaxRows = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      timeoutId = setTimeout(() => {
+        calculateMaxRows();
+      }, 100); // 100ms debounce
     };
 
     // Calculate initially
     calculateMaxRows();
     
-    // Recalculate on resize
-    window.addEventListener('resize', calculateMaxRows);
+    // Recalculate on window resize (debounced)
+    const handleResize = () => {
+      debouncedCalculateMaxRows();
+    };
+    window.addEventListener('resize', handleResize);
     
-    // Use ResizeObserver to watch for container size changes
+    // Use ResizeObserver to watch for container size changes (debounced)
     const resizeObserver = new ResizeObserver(() => {
-      calculateMaxRows();
+      debouncedCalculateMaxRows();
     });
     
     if (gridRef.current?.parentElement) {
@@ -91,7 +112,10 @@ export function WorkspaceGrid() {
     }
     
     return () => {
-      window.removeEventListener('resize', calculateMaxRows);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
     };
   }, [rowHeight, margin, containerPadding]);
@@ -177,6 +201,11 @@ export function WorkspaceGrid() {
       if (isResizingRef.current) {
         return;
       }
+      // CRITICAL BUG FIX: Don't update during drag - wait for drag to complete
+      // This prevents cards from reverting to original position during drag
+      if (isDraggingRef.current) {
+        return;
+      }
       
       // Adjust layout to ensure all cards fit within viewport
       const layoutArray = layouts.lg || layouts.md || layouts.sm || layouts.xs || [];
@@ -198,6 +227,11 @@ export function WorkspaceGrid() {
   // Track when resize starts
   const handleResizeStart = useCallback(() => {
     isResizingRef.current = true;
+  }, []);
+
+  // Track when drag starts (CRITICAL: prevents card revert bug)
+  const handleDragStart = useCallback(() => {
+    isDraggingRef.current = true;
   }, []);
 
   // Optimize resize stop handler
@@ -236,6 +270,32 @@ export function WorkspaceGrid() {
     }, 0);
   }, [isLocked, maxRows, updateLayout, adjustLayout]);
 
+  // CRITICAL BUG FIX: Handle drag stop to finalize layout and prevent card revert
+  const handleDragStop = useCallback((layout: any, oldItem: any, newItem: any, placeholder: any, e: any, element: any) => {
+    // Mark that drag is complete
+    isDraggingRef.current = false;
+    
+    // After drag completes, ensure the layout is updated with the final state
+    // Use setTimeout to ensure this happens after React Grid Layout has fully processed the drag
+    setTimeout(() => {
+      if (!isLocked && layout) {
+        // Adjust layout to ensure all cards fit within viewport
+        const adjustedLayout = adjustLayout(layout);
+        
+        // Get the current layouts from React Grid Layout
+        const currentLayouts = {
+          lg: adjustedLayout,
+          md: adjustedLayout,
+          sm: adjustedLayout,
+          xs: adjustedLayout,
+        };
+        
+        // Update the store with the final layout state
+        updateLayout(currentLayouts);
+      }
+    }, 0);
+  }, [isLocked, updateLayout, adjustLayout]);
+
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -251,6 +311,8 @@ export function WorkspaceGrid() {
         cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
         rowHeight={rowHeight}
         onDrag={handleDrag}
+        onDragStart={handleDragStart}
+        onDragStop={handleDragStop}
         onLayoutChange={handleLayoutChange}
         onResizeStart={handleResizeStart}
         onResizeStop={handleResizeStop}

@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useMarketStore } from '@/stores/market-store';
 import { useMarketPrice } from '@/lib/hooks/usePolymarketData';
+import { useRealtimePrice } from '@/lib/hooks/useRealtimePrice';
 import { useTrading } from '@/lib/hooks/useTrading';
 import { usePresets } from '@/lib/hooks/usePresets';
 import { parseUnits } from 'viem';
@@ -20,11 +21,15 @@ import { getGasSettings } from '@/lib/web3/gas-utils';
 import { simulateTrade } from '@/lib/web3/trade-simulation';
 import { Zap, Settings2, Play, Shield } from 'lucide-react';
 import { RiskWarning } from '@/components/ui/RiskWarning';
+import { useToast } from '@/components/Toast';
 
 function QuickTicketCardComponent() {
   const { selectedMarketId, getMarket } = useMarketStore();
   const { data: price, isLoading } = useMarketPrice(selectedMarketId);
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  
+  // Subscribe to real-time price updates for instant updates
+  useRealtimePrice(selectedMarketId || null, 'YES');
   const [showPresetsDialog, setShowPresetsDialog] = useState(false);
   const [showGasSettings, setShowGasSettings] = useState(false);
   const [showSlippageSettings, setShowSlippageSettings] = useState(false);
@@ -42,6 +47,7 @@ function QuickTicketCardComponent() {
   const { buy, sell } = useTrading();
   const { presets, savePresets } = usePresets();
   const { settings, setSlippageTolerance, setGasPriority } = useTradingSettingsStore();
+  const { error: showErrorToast, warning: showWarningToast } = useToast();
 
   // Memoize handlers to prevent unnecessary re-renders - must be defined before early returns
   const handleShowMarketSelector = useCallback(() => {
@@ -95,6 +101,7 @@ function QuickTicketCardComponent() {
   const handleQuickBuy = useCallback(async (amount: number) => {
     if (!selectedMarketId || isSubmitting) return;
     
+    console.log('[QuickTicketCard] handleQuickBuy called with amount:', amount, 'from preset:', presets.buyPreset);
     const usdcAmount = parseUnits(amount.toFixed(6), 6);
     const transaction: TransactionDetails = {
       type: 'buy',
@@ -105,9 +112,10 @@ function QuickTicketCardComponent() {
       currentPrice: currentProbability / 100,
     };
     
+    console.log('[QuickTicketCard] Created transaction:', { amount, amountDisplay: transaction.amountDisplay, usdcAmount: usdcAmount.toString() });
     setPendingTransaction(transaction);
     setShowConfirmModal(true);
-  }, [selectedMarketId, currentProbability, isSubmitting]);
+  }, [selectedMarketId, currentProbability, isSubmitting, presets.buyPreset]);
 
   // Execute buy after confirmation - MUST be before early returns
   const executeBuy = useCallback(async () => {
@@ -137,16 +145,28 @@ function QuickTicketCardComponent() {
           setTransactionHash(null);
         }, 3000);
       } else {
-        throw new Error(result.error || 'Transaction failed');
+        const errorMessage = result.error || 'Transaction failed';
+        // Show toast notification for balance errors
+        if (errorMessage.includes('Insufficient') || errorMessage.includes('balance')) {
+          showErrorToast('Insufficient Balance', errorMessage);
+        } else {
+          showErrorToast('Transaction Failed', errorMessage);
+        }
+        throw new Error(errorMessage);
       }
     } catch (error: any) {
-      setLastResult(`❌ Error: ${error.message || 'Unknown error'}`);
+      const errorMessage = error.message || 'Unknown error';
+      setLastResult(`❌ Error: ${errorMessage}`);
       setTimeout(() => setLastResult(null), 5000);
+      // Show toast notification for balance errors
+      if (errorMessage.includes('Insufficient') || errorMessage.includes('balance')) {
+        showErrorToast('Insufficient Balance', errorMessage);
+      }
       throw error; // Re-throw to let modal handle it
     } finally {
       setIsSubmitting(false);
     }
-  }, [pendingTransaction, buy, currentProbability, isSubmitting]);
+  }, [pendingTransaction, buy, currentProbability, isSubmitting, showErrorToast]);
 
   // Quick sell handler - MUST be before early returns
   const handleQuickSell = useCallback(async (percentage: number) => {
@@ -200,16 +220,28 @@ function QuickTicketCardComponent() {
           setTransactionHash(null);
         }, 3000);
       } else {
-        throw new Error(result.error || 'Transaction failed');
+        const errorMessage = result.error || 'Transaction failed';
+        // Show toast notification for balance errors
+        if (errorMessage.includes('Insufficient') || errorMessage.includes('balance')) {
+          showErrorToast('Insufficient Balance', errorMessage);
+        } else {
+          showErrorToast('Transaction Failed', errorMessage);
+        }
+        throw new Error(errorMessage);
       }
     } catch (error: any) {
-      setLastResult(`❌ Error: ${error.message || 'Unknown error'}`);
+      const errorMessage = error.message || 'Unknown error';
+      setLastResult(`❌ Error: ${errorMessage}`);
       setTimeout(() => setLastResult(null), 5000);
+      // Show toast notification for balance errors
+      if (errorMessage.includes('Insufficient') || errorMessage.includes('balance')) {
+        showErrorToast('Insufficient Balance', errorMessage);
+      }
       throw error; // Re-throw to let modal handle it
     } finally {
       setIsSubmitting(false);
     }
-  }, [pendingTransaction, sell, currentProbability, isSubmitting]);
+  }, [pendingTransaction, sell, currentProbability, isSubmitting, showErrorToast]);
 
   if (!selectedMarketId) {
     return (
@@ -296,49 +328,45 @@ function QuickTicketCardComponent() {
           {/* Quick Buy Section */}
           <div className="space-y-2 flex-shrink-0">
             <div className="text-xs font-semibold text-green-400">Quick Buy</div>
-            <div className="grid grid-cols-3 gap-2">
-              {presets.buyPresets.map((preset) => (
-                <div key={`buy-${preset}`} className="flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-xs bg-green-600/10 hover:bg-green-600/20 border-green-600/50 text-green-400 disabled:opacity-50 flex-1"
-                    onClick={() => handleQuickBuy(preset)}
-                    disabled={isSubmitting}
-                  >
-                    ${preset}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs h-7 w-7 p-0"
-                    onClick={() => handleSimulate(preset, 'buy')}
-                    disabled={isSimulating}
-                    title="Simulate trade"
-                  >
-                    <Play className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs bg-green-600/10 hover:bg-green-600/20 border-green-600/50 text-green-400 disabled:opacity-50 flex-1"
+                onClick={() => {
+                  console.log('[QuickTicketCard] Buy preset clicked:', { preset: presets.buyPreset });
+                  handleQuickBuy(presets.buyPreset);
+                }}
+                disabled={isSubmitting}
+              >
+                ${presets.buyPreset}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs p-0"
+                onClick={() => handleSimulate(presets.buyPreset, 'buy')}
+                disabled={isSimulating}
+                title="Simulate trade"
+              >
+                <Play className="h-3 w-3" />
+              </Button>
             </div>
           </div>
 
           {/* Quick Sell Section */}
           <div className="space-y-2 flex-shrink-0">
             <div className="text-xs font-semibold text-red-400">Quick Sell</div>
-            <div className="grid grid-cols-3 gap-2">
-              {presets.sellPresets.map((preset) => (
-                <Button
-                  key={`sell-${preset}`}
-                  size="sm"
-                  variant="outline"
-                  className="text-xs bg-red-600/10 hover:bg-red-600/20 border-red-600/50 text-red-400 disabled:opacity-50"
-                  onClick={() => handleQuickSell(preset)}
-                  disabled={isSubmitting}
-                >
-                  {preset}%
-                </Button>
-              ))}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs bg-red-600/10 hover:bg-red-600/20 border-red-600/50 text-red-400 disabled:opacity-50 flex-1"
+                onClick={() => handleQuickSell(presets.sellPreset)}
+                disabled={isSubmitting}
+              >
+                {presets.sellPreset}%
+              </Button>
             </div>
           </div>
 
@@ -399,8 +427,8 @@ function QuickTicketCardComponent() {
       <PresetsDialog
         open={showPresetsDialog}
         onOpenChange={handleClosePresetsDialog}
-        buyPresets={presets.buyPresets}
-        sellPresets={presets.sellPresets}
+        buyPreset={presets.buyPreset}
+        sellPreset={presets.sellPreset}
         onSave={savePresets}
       />
 

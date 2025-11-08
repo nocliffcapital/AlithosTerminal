@@ -143,7 +143,7 @@ function PositionsCardComponent() {
           return (
             <div
               key={`${position.marketId}-${position.outcome}`}
-              className="border border-border rounded p-2 hover:bg-accent/50 transition-colors cursor-pointer"
+              className="border border-border rounded p-3 hover:bg-accent/50 transition-colors duration-200 cursor-pointer"
               onClick={() => selectMarket(position.marketId)}
             >
               {/* Market Info */}
@@ -152,7 +152,7 @@ function PositionsCardComponent() {
                   <div className="text-xs font-medium truncate">
                     {position.market?.question || position.marketId.substring(0, 20) + '...'}
                   </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                  <div className="text-xs text-muted-foreground mt-1">
                     {position.outcome} • {position.market?.slug || 'Unknown market'}
                   </div>
                 </div>
@@ -166,25 +166,25 @@ function PositionsCardComponent() {
               {/* Position Details */}
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <div className="text-muted-foreground text-[10px]">Size</div>
+                  <div className="text-muted-foreground text-xs font-medium">Size</div>
                   <div className="font-mono font-medium">
                     {amount.toFixed(4)} tokens
                   </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground text-[10px]">Value</div>
+                  <div className="text-muted-foreground text-xs font-medium">Value</div>
                   <div className="font-mono font-medium">
                     ${position.currentValue.toFixed(2)}
                   </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground text-[10px]">Entry Price</div>
+                  <div className="text-muted-foreground text-xs font-medium">Entry Price</div>
                   <div className="font-mono">
                     {(entryPrice * 100).toFixed(1)}%
                   </div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground text-[10px]">Current Price</div>
+                  <div className="text-muted-foreground text-xs font-medium">Current Price</div>
                   <div className={`font-mono flex items-center gap-1 ${
                     priceChange >= 0 ? 'text-green-400' : 'text-red-400'
                   }`}>

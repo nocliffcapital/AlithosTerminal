@@ -12,6 +12,10 @@ import {
   TradeParams,
   TradeResult,
 } from './polymarket-contracts';
+import { validateNetwork } from './network-validation';
+import { verifyFPMMABI } from './abi-verification';
+import { checkUSDCBalance, checkPOLBalance, getBalanceErrorMessage } from './balance-checks';
+import { simulateTrade } from './trade-simulation';
 
 // Helper to get viem clients from Privy wallet
 export function useTrading() {
@@ -201,6 +205,29 @@ export function useTrading() {
       }
 
       const address = user.wallet.address as Address;
+      
+      // Validate network
+      const networkValidation = await validateNetwork();
+      if (!networkValidation.isValid) {
+        throw new Error(networkValidation.error || 'Please switch to Polygon network');
+      }
+
+      // Estimate gas cost
+      const gasEstimate = await estimateGas(params);
+      const gasPrice = await getPublicClient().getGasPrice();
+      const estimatedGasCost = gasEstimate * gasPrice;
+
+      // Check POL balance for gas
+      const polBalanceCheck = await checkPOLBalance(address, estimatedGasCost);
+      if (!polBalanceCheck.hasEnoughBalance) {
+        throw new Error(getBalanceErrorMessage(polBalanceCheck, 'POL'));
+      }
+
+      // Note: For sell, we need to check outcome token balance, not USDC balance
+      // The amount here represents the return amount in USDC, not the outcome tokens to sell
+      // We would need to check outcome token balance, but that requires conditionId which we don't have in params
+      // For now, we'll let the contract handle the validation
+
       const publicClient = getPublicClient();
       const walletClient = await getWalletClient();
 

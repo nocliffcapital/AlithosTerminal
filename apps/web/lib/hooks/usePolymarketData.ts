@@ -6,6 +6,9 @@ import { polymarketClient } from '@/lib/api/polymarket';
 import { polymarketWS } from '@/lib/api/websocket';
 import { onChainService } from '@/lib/api/onchain';
 import { useMarketStore } from '@/stores/market-store';
+import { useRealtimePrice } from './useRealtimePrice';
+import { useRealtimeOrderbook } from './useRealtimeOrderbook';
+import { useRealtimeTrades } from './useRealtimeTrades';
 
 /**
  * Hook to fetch markets from Polymarket
@@ -103,8 +106,8 @@ export function useMarketPrice(marketId: string | null) {
       return price;
     },
     enabled: !!marketId, // Always enabled if marketId provided - Gamma API is public!
-    staleTime: 30000, // 30 seconds - data is fresh for 30 seconds (increased from 10)
-    refetchInterval: 30000, // Refetch every 30 seconds (increased from 15s to reduce load)
+    staleTime: 10 * 60 * 1000, // 10 minutes - real-time updates handle most changes
+    refetchInterval: 10 * 60 * 1000, // 10 minutes - real-time updates handle most changes, polling is fallback only
     gcTime: 10 * 60 * 1000, // 10 minutes cache time
     refetchOnMount: false, // Don't refetch if data is fresh
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)
@@ -112,15 +115,12 @@ export function useMarketPrice(marketId: string | null) {
     refetchOnWindowFocus: false,
   });
 
-  // Subscribe to WebSocket updates if available (with debouncing)
+  // Subscribe to real-time price updates (YES outcome by default, covers both)
+  useRealtimePrice(marketId, 'YES');
+
+  // Legacy WebSocket subscription (keep for backward compatibility)
   useEffect(() => {
     if (!marketId || !polymarketWS.isConnected()) {
-      // Only log warning once per session
-      if (typeof window !== 'undefined' && !(window as any).__polymarket_ws_warned) {
-        (window as any).__polymarket_ws_warned = true;
-        // Suppress this warning - it's informational
-        // console.warn('Polymarket API key not configured - WebSocket connection disabled');
-      }
       return;
     }
 
@@ -213,17 +213,42 @@ export function useHistoricalPrices(marketId: string | null, hours: number | nul
         // Suppress verbose debug logs
         const historicalPrices = await polymarketClient.getHistoricalPrices(marketId, interval, fidelity);
         
+        // OPTIMIZATION: Return CLOB data immediately if available, even if incomplete
+        // This allows the chart to render instantly while trades are fetched in background
+        let clobData: Array<{ timestamp: number; price: number; probability: number; noProbability: number }> = [];
+        let clobDataComplete = true;
+        
         if (historicalPrices && historicalPrices.length > 0) {
-          // Suppress verbose success logs
-          return historicalPrices.map((item) => ({
+          clobData = historicalPrices.map((item) => ({
             timestamp: item.timestamp,
             price: item.price,
             probability: item.price * 100,
             noProbability: (1 - item.price) * 100, // Mirrored
           }));
+          
+          // Check if the CLOB API data is incomplete (less than 35 days suggests API limit)
+          const sortedPrices = [...historicalPrices].sort((a, b) => a.timestamp - b.timestamp);
+          const firstTimestamp = sortedPrices[0].timestamp;
+          const lastTimestamp = sortedPrices[sortedPrices.length - 1].timestamp;
+          const timeSpanDays = (lastTimestamp - firstTimestamp) / (1000 * 60 * 60 * 24);
+          
+          // If data spans less than 35 days and we're requesting ALL time, supplement with trades
+          if (hours === null && timeSpanDays < 35) {
+            console.warn(`[useHistoricalPrices] CLOB API returned only ${timeSpanDays.toFixed(1)} days, supplementing with trades for complete history`);
+            clobDataComplete = false;
+            // Continue to trades fallback to supplement the data
+            // We'll merge CLOB data with trades later
+          } else {
+            // Data looks complete, return it immediately for instant chart render
+            return clobData;
+          }
         }
         
-        // FALLBACK: Build from trades (only if price history unavailable)
+        // OPTIMIZATION: If we have CLOB data (even if incomplete), we'll still fetch trades
+        // but we can optimize the trade fetching to be faster
+        // The chart will render with merged data once trades are fetched
+        
+        // FALLBACK: Build from trades (if price history unavailable or incomplete)
         // First, get market to find conditionId
         const market = await polymarketClient.getMarket(marketId);
         const conditionId = market?.conditionId;
@@ -246,9 +271,10 @@ export function useHistoricalPrices(marketId: string | null, hours: number | nul
           // Suppress verbose debug logs
         }
         
-        // Use reasonable limits to avoid long loading times
-        // Start with smaller limit, increase if needed
-        const initialLimit = hours === null ? 2000 : (hours <= 24 ? 1000 : 1000);
+        // OPTIMIZATION: Use smaller initial limit for faster first render
+        // We can fetch more data in background if needed
+        // For ALL time, start smaller to show chart faster, then expand
+        const initialLimit = hours === null ? 2000 : (hours <= 24 ? 500 : 1000);
         // Suppress verbose debug logs
         
         let trades = await polymarketClient.getTrades(marketId, { 
@@ -282,44 +308,82 @@ export function useHistoricalPrices(marketId: string | null, hours: number | nul
           }
         }
         
-        // For ALL time, we're already fetching newest first, so we have recent data
-        // If we got trades but want more complete history, try fetching older trades (with timeout)
-        if (trades.length > 0 && trades.length < 1000 && hours === null) {
-          // Suppress verbose debug logs
-          // Check the earliest trade we have
-          const earliestTrade = trades[0];
-          const earliestTimestamp = earliestTrade.timestamp;
-          const daysAgo = (Date.now() - earliestTimestamp) / (1000 * 60 * 60 * 24);
+        // For ALL time, fetch complete historical data by fetching chunks in parallel
+        // OPTIMIZATION: Fetch multiple chunks in parallel instead of sequentially
+        if (trades.length > 0 && hours === null) {
+          const sortedTrades = [...trades].sort((a, b) => a.timestamp - b.timestamp);
+          const earliestTimestamp = sortedTrades[0].timestamp;
+          const now = Date.now();
           
-          // If our earliest trade is less than 30 days ago, try to fetch older trades
-          if (daysAgo < 30) {
-            // Suppress verbose debug logs
-            try {
-              // Fetch older trades by using the earliest timestamp as startTime (but in ascending order)
-              const olderTrades = await Promise.race([
+          // Calculate total time span
+          const totalDays = (now - earliestTimestamp) / (1000 * 60 * 60 * 24);
+          const chunkDays = 90;
+          const numChunks = Math.ceil(totalDays / chunkDays);
+          
+          // RATE LIMIT: Based on CLOB Ledger /data/trades: 150 req/10s
+          // Fetch in batches of 10 chunks (safe margin)
+          const MAX_PARALLEL_CHUNKS = 10;
+          const BATCH_DELAY_MS = 1100; // Wait 1.1s between batches to respect 10s window
+          const MAX_CHUNKS = 20; // Limit total chunks to prevent excessive requests
+          
+          // Create all chunk fetch promises
+          const chunkPromises: Array<{ startTime: number; promise: Promise<typeof trades> }> = [];
+          
+          for (let i = 0; i < numChunks && i < MAX_CHUNKS; i++) {
+            const chunkStartSeconds = Math.floor(earliestTimestamp / 1000) - (chunkDays * (i + 1) * 24 * 60 * 60);
+            
+            chunkPromises.push({
+              startTime: chunkStartSeconds,
+              promise: Promise.race([
                 polymarketClient.getTrades(marketId, { 
-                  limit: 3000,
-                  startTime: Math.floor(earliestTimestamp / 1000) - (30 * 24 * 60 * 60), // 30 days before earliest
+                  limit: 5000,
+                  startTime: chunkStartSeconds,
                   conditionId: conditionId
                 }),
                 new Promise<typeof trades>((_, reject) => {
-                  setTimeout(() => reject(new Error('Timeout')), 10000); // 10 second timeout
+                  setTimeout(() => reject(new Error('Timeout')), 10000);
                 })
-              ]);
-              
-              if (olderTrades.length > 0) {
-                // Combine: older trades (ascending) + current trades (already sorted ascending)
-                // Remove duplicates by ID
-                const allTradeIds = new Set(trades.map(t => t.id));
-                const uniqueOlderTrades = olderTrades.filter(t => !allTradeIds.has(t.id));
-                trades = [...uniqueOlderTrades, ...trades].sort((a, b) => a.timestamp - b.timestamp);
-                // Suppress verbose debug logs
+              ]).catch(() => []) // Return empty array on error
+            });
+          }
+          
+          // Fetch chunks in batches to respect rate limits
+          let allTrades = [...trades];
+          
+          for (let batchStart = 0; batchStart < chunkPromises.length; batchStart += MAX_PARALLEL_CHUNKS) {
+            const batch = chunkPromises.slice(batchStart, batchStart + MAX_PARALLEL_CHUNKS);
+            
+            // Fetch this batch in parallel
+            const batchResults = await Promise.allSettled(
+              batch.map(({ promise }) => promise)
+            );
+            
+            // Combine results
+            let batchHadNewData = false;
+            batchResults.forEach((result) => {
+              if (result.status === 'fulfilled' && result.value.length > 0) {
+                const existingTradeIds = new Set(allTrades.map(t => t.id));
+                const uniqueTrades = result.value.filter(t => !existingTradeIds.has(t.id));
+                if (uniqueTrades.length > 0) {
+                  allTrades = [...uniqueTrades, ...allTrades].sort((a, b) => a.timestamp - b.timestamp);
+                  batchHadNewData = true;
+                }
               }
-            } catch (timeoutError) {
-              // Suppress verbose timeout logs
-              // Continue with what we have (recent data is better than waiting)
+            });
+            
+            // If we got no new data in this batch, we've likely reached the beginning
+            if (!batchHadNewData && batchStart > 0) {
+              break; // No new data, stop fetching
+            }
+            
+            // Wait before next batch (except for last batch)
+            if (batchStart + MAX_PARALLEL_CHUNKS < chunkPromises.length) {
+              await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
             }
           }
+          
+          // Update trades with the complete dataset
+          trades = allTrades;
         }
         
         if (hours === null && trades.length > 0) {
@@ -466,6 +530,32 @@ export function useHistoricalPrices(marketId: string | null, hours: number | nul
         
         // Sort by timestamp
         pricePoints.sort((a, b) => a.timestamp - b.timestamp);
+        
+        // If we have CLOB API data that was incomplete, merge it with trades data
+        if (!clobDataComplete && clobData.length > 0) {
+          // Use already converted CLOB data
+          const clobPoints = clobData;
+          
+          // Merge CLOB and trades data, removing duplicates (prefer trades for overlapping timestamps)
+          const allPoints = [...clobPoints, ...pricePoints]
+            .sort((a, b) => a.timestamp - b.timestamp);
+          
+          // Remove duplicates - if two points are within 1 hour, keep the trades one
+          const mergedPoints: typeof pricePoints = [];
+          const seenTimestamps = new Set<number>();
+          
+          allPoints.forEach((point) => {
+            // Round to nearest hour for deduplication
+            const roundedTime = Math.floor(point.timestamp / (60 * 60 * 1000)) * (60 * 60 * 1000);
+            if (!seenTimestamps.has(roundedTime)) {
+              seenTimestamps.add(roundedTime);
+              mergedPoints.push(point);
+            }
+          });
+          
+          pricePoints.splice(0, pricePoints.length, ...mergedPoints);
+          console.log(`[useHistoricalPrices] Merged ${clobPoints.length} CLOB points with ${pricePoints.length - clobPoints.length} trade points`);
+        }
         
         // For ALL time with many trades, we might have too many bucketed points
         // Increase limit to show more data - Recharts can handle 500-1000 points reasonably
@@ -630,15 +720,18 @@ export function useOrderBook(
       return book;
     },
     enabled: !!marketId, // Always enable if marketId exists - let the API handle auth requirements
-    staleTime: 5000, // 5 seconds - order book data is very dynamic
-    refetchInterval: 3000, // Refetch every 3 seconds for order book (increased from 2s)
+    staleTime: 5 * 60 * 1000, // 5 minutes - real-time updates handle most changes
+    refetchInterval: 5 * 60 * 1000, // 5 minutes - real-time updates handle most changes, polling is fallback only
     gcTime: 5 * 60 * 1000, // 5 minutes cache time
     refetchOnMount: false, // Don't refetch if data is fresh
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)
     retry: 2,
   });
 
-  // Subscribe to WebSocket updates if available (with debouncing)
+  // Subscribe to real-time orderbook updates
+  useRealtimeOrderbook(marketId, outcome);
+
+  // Legacy WebSocket subscription (keep for backward compatibility)
   useEffect(() => {
     if (!marketId || (!isConfigured && !useL1Auth) || !polymarketWS.isConnected()) return;
 
@@ -713,15 +806,18 @@ export function useTrades(marketId: string | null) {
       return trades.sort((a, b) => b.timestamp - a.timestamp);
     },
     enabled: !!marketId, // Enabled as long as marketId exists - Activity Subgraph doesn't need API key
-    staleTime: 5000, // 5 seconds - trades data is dynamic
-    refetchInterval: 5000, // Refetch every 5 seconds (increased from 3s)
+    staleTime: 5 * 60 * 1000, // 5 minutes - real-time updates handle most changes
+    refetchInterval: 5 * 60 * 1000, // 5 minutes - real-time updates handle most changes, polling is fallback only
     gcTime: 5 * 60 * 1000, // 5 minutes cache time
     refetchOnMount: false, // Don't refetch if data is fresh
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)
     retry: 2,
   });
 
-  // Subscribe to WebSocket updates if available (with debouncing)
+  // Subscribe to real-time trade updates
+  useRealtimeTrades(marketId);
+
+  // Legacy WebSocket subscription (keep for backward compatibility)
   useEffect(() => {
     if (!marketId || !polymarketWS.isConnected()) return;
 

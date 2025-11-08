@@ -54,8 +54,8 @@ export function usePositions(includeMarket: boolean = true) {
       return (data.positions || []) as PositionWithPnL[];
     },
     enabled: authenticated && !!walletAddress,
-    staleTime: 10000, // 10 seconds - positions change frequently
-    refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
+    staleTime: 5 * 60 * 1000, // 5 minutes - positions change less frequently than prices
+    refetchInterval: 5 * 60 * 1000, // 5 minutes - positions update when trades/orders change, polling is fallback only
     gcTime: 5 * 60 * 1000, // 5 minutes cache time
     refetchOnMount: true,
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)

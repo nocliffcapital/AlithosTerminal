@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useMarketStore } from '@/stores/market-store';
 import { useMarketPrice } from '@/lib/hooks/usePolymarketData';
+import { useRealtimePrice } from '@/lib/hooks/useRealtimePrice';
 import {
   probToLogit,
   logitToProb,
@@ -15,6 +16,7 @@ import { Loader2, Search, RefreshCw, ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MarketSelector } from '@/components/MarketSelector';
 
 type ConversionType = 'probability' | 'decimalOdds' | 'usOdds' | 'logit';
@@ -23,6 +25,9 @@ function PriceConverterCardComponent() {
   const { selectedMarketId, getMarket } = useMarketStore();
   const { data: price, isLoading } = useMarketPrice(selectedMarketId);
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  
+  // Subscribe to real-time price updates for instant updates
+  useRealtimePrice(selectedMarketId || null, 'YES');
   
   // Input state
   const [inputType, setInputType] = useState<ConversionType>('probability');
@@ -128,19 +133,19 @@ function PriceConverterCardComponent() {
 
       {isLoading && selectedMarketId ? (
         <div className="flex items-center justify-center flex-1">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <LoadingSpinner size="sm" text="Loading market data..." />
         </div>
       ) : (
         <div className="flex flex-col space-y-3 flex-1 min-h-0">
           {/* Input Section */}
           <div className="space-y-2 flex-shrink-0">
             <div className="flex items-center justify-between">
-              <Label className="text-xs">Convert From</Label>
+              <Label>Convert From</Label>
               {currentProbability > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 text-xs px-2"
+                  className="text-xs px-2"
                   onClick={handleUseCurrentPrice}
                 >
                   Use Current ({currentProbability.toFixed(1)}%)
@@ -164,8 +169,8 @@ function PriceConverterCardComponent() {
             </div>
 
             {/* Input Value */}
-            <div className="space-y-1">
-              <Label className="text-xs">
+            <div className="space-y-2">
+              <Label>
                 {inputType === 'probability' ? 'Probability (%)' :
                  inputType === 'decimalOdds' ? 'Decimal Odds' :
                  inputType === 'usOdds' ? 'US Odds' :
@@ -194,31 +199,31 @@ function PriceConverterCardComponent() {
                 <span className="text-xs font-semibold">Conversions</span>
               </div>
 
-              <div className="space-y-2 p-3 bg-muted rounded-lg border border-border">
+              <div className="space-y-0 border border-border rounded-lg overflow-hidden">
                 {/* Probability */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Probability:</span>
-                  <span className="font-mono font-medium text-sm">{conversions.probability.toFixed(2)}%</span>
+                <div className="flex items-center justify-between py-2.5 px-3 border-b border-border/50">
+                  <span className="text-xs text-muted-foreground font-medium">Probability:</span>
+                  <span className="font-mono font-semibold text-sm text-foreground">{conversions.probability.toFixed(2)}%</span>
                 </div>
 
                 {/* Decimal Odds */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Decimal Odds:</span>
-                  <span className="font-mono font-medium text-sm">{conversions.decimalOdds.toFixed(2)}</span>
+                <div className="flex items-center justify-between py-2.5 px-3 border-b border-border/50">
+                  <span className="text-xs text-muted-foreground font-medium">Decimal Odds:</span>
+                  <span className="font-mono font-semibold text-sm text-foreground">{conversions.decimalOdds.toFixed(2)}</span>
                 </div>
 
                 {/* US Odds */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">US Odds:</span>
-                  <span className="font-mono font-medium text-sm">
+                <div className="flex items-center justify-between py-2.5 px-3 border-b border-border/50">
+                  <span className="text-xs text-muted-foreground font-medium">US Odds:</span>
+                  <span className="font-mono font-semibold text-sm text-foreground">
                     {conversions.usOdds > 0 ? '+' : ''}{conversions.usOdds.toFixed(0)}
                   </span>
                 </div>
 
                 {/* Logit */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Logit:</span>
-                  <span className="font-mono font-medium text-sm">{conversions.logit.toFixed(4)}</span>
+                <div className="flex items-center justify-between py-2.5 px-3">
+                  <span className="text-xs text-muted-foreground font-medium">Logit:</span>
+                  <span className="font-mono font-semibold text-sm text-foreground">{conversions.logit.toFixed(4)}</span>
                 </div>
               </div>
 
@@ -236,9 +241,9 @@ function PriceConverterCardComponent() {
           )}
 
           {/* Info */}
-          <div className="text-xs text-muted-foreground flex-shrink-0 p-2 bg-muted/50 rounded">
-            <div className="font-medium mb-1">Quick Reference:</div>
-            <div className="space-y-0.5">
+          <div className="text-xs text-muted-foreground flex-shrink-0 p-3 border border-border/50 rounded-lg">
+            <div className="font-semibold mb-2 text-foreground">Quick Reference:</div>
+            <div className="space-y-1">
               <div>• Probability: 0-100% (e.g., 65.5%)</div>
               <div>• Decimal Odds: &gt;1 (e.g., 1.52)</div>
               <div>• US Odds: +favorite / -underdog (e.g., -150, +200)</div>

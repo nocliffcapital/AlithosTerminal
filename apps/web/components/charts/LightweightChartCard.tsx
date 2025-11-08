@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { createChart, IChartApi, ISeriesApi, LineSeriesPartialOptions, LineStyleOptions, Time, LineSeries } from 'lightweight-charts';
 import { chartTheme, chartColors, lineSeriesOptions, convertHistoricalPricesToLightweight, LightweightChartDataPoint, createCustomTooltip, updateTooltip, positionTooltip } from '@/lib/charts/utils';
 
@@ -103,27 +103,37 @@ export function LightweightChartCard({
               if (chartRef.current && typeof chartRef.current.addSeries === 'function') {
                 // Configure time scale to not default to recent data
                 // This helps ensure we show all data from start
-                const timeScale = chartRef.current.timeScale();
-                if (timeScale) {
-                  // Disable right bar margin to prevent defaulting to recent data
-                  timeScale.applyOptions({
-                    rightOffset: 0,
-                    fixRightEdge: false,
-                    fixLeftEdge: false,
-                  });
+                // Wrap in try-catch to handle any initialization timing issues
+                try {
+                  const timeScale = chartRef.current.timeScale();
+                  if (timeScale) {
+                    // Disable right bar margin to prevent defaulting to recent data
+                    timeScale.applyOptions({
+                      rightOffset: 0,
+                      fixRightEdge: false,
+                      fixLeftEdge: false,
+                    });
+                  }
+                } catch (error) {
+                  // If time scale isn't ready yet, that's okay - we'll set it later when data is available
+                  console.warn('[LightweightChartCard] Time scale not ready during initialization:', error);
                 }
                 setIsReady(true);
               } else {
                 // Retry if not ready
                 setTimeout(() => {
                   if (chartRef.current && typeof chartRef.current.addSeries === 'function') {
-                    const timeScale = chartRef.current.timeScale();
-                    if (timeScale) {
-                      timeScale.applyOptions({
-                        rightOffset: 0,
-                        fixRightEdge: false,
-                        fixLeftEdge: false,
-                      });
+                    try {
+                      const timeScale = chartRef.current.timeScale();
+                      if (timeScale) {
+                        timeScale.applyOptions({
+                          rightOffset: 0,
+                          fixRightEdge: false,
+                          fixLeftEdge: false,
+                        });
+                      }
+                    } catch (error) {
+                      console.warn('[LightweightChartCard] Time scale not ready during retry:', error);
                     }
                     setIsReady(true);
                   }
@@ -167,6 +177,56 @@ export function LightweightChartCard({
       setIsReady(false);
     };
   }, [height]);
+
+  // OPTIMIZATION: Memoize price scale calculations to prevent recalculation on every render
+  const priceScaleConfig = useMemo(() => {
+    const hasData = series.some(s => s.data.length > 0);
+    if (!hasData) return null;
+    
+    const allValues = series.flatMap(s => s.data.map(d => d.value)).filter(v => !isNaN(v) && v != null);
+    if (allValues.length === 0) return null;
+    
+    // Calculate min and max from data
+    const minValue = Math.min(...allValues);
+    const maxValue = Math.max(...allValues);
+    
+    // Validate values
+    if (isNaN(minValue) || isNaN(maxValue) || !isFinite(minValue) || !isFinite(maxValue)) {
+      return null; // Will use autoScale fallback
+    }
+    
+    const range = maxValue - minValue;
+    
+    // Adaptive padding based on value range
+    let increment: number;
+    if (range <= 0.05) {
+      increment = 0.005;
+    } else if (range <= 0.1) {
+      increment = 0.01;
+    } else if (range <= 0.5) {
+      increment = 0.05;
+    } else if (range <= 1) {
+      increment = 0.1;
+    } else if (range <= 5) {
+      increment = 0.5;
+    } else if (range <= 10) {
+      increment = 1;
+    } else {
+      increment = 5;
+    }
+    
+    // Add padding: round down min and round up max to nearest increment
+    const paddedMin = Math.max(0, Math.floor(minValue / increment) * increment);
+    const paddedMax = Math.ceil(maxValue / increment) * increment;
+    
+    // Add padding (10% of range, but at least 1 increment) to improve visibility
+    const paddingPercent = range <= 0.1 ? 0.2 : 0.1;
+    const padding = Math.max(increment, range * paddingPercent);
+    const finalMin = Math.max(0, paddedMin - padding);
+    const finalMax = paddedMax + padding;
+    
+    return { min: finalMin, max: finalMax };
+  }, [series]);
 
   // Create/update series when data changes
   useEffect(() => {
@@ -229,7 +289,20 @@ export function LightweightChartCard({
         if (seriesData.data.length > 0 && seriesInstance) {
           // Sort data by time to ensure proper rendering
           const sortedData = [...seriesData.data].sort((a, b) => Number(a.time) - Number(b.time));
-          seriesInstance.setData(sortedData);
+          
+          // Remove duplicate timestamps - keep the last value for each timestamp
+          const seenTimes = new Map<number, LightweightChartDataPoint>();
+          
+          for (const point of sortedData) {
+            const time = Number(point.time);
+            // Keep the last occurrence of each timestamp
+            seenTimes.set(time, point);
+          }
+          
+          // Convert map back to array and sort again (in case map iteration order differs)
+          const finalData = Array.from(seenTimes.values()).sort((a, b) => Number(a.time) - Number(b.time));
+          
+          seriesInstance.setData(finalData);
         } else {
           if (seriesInstance) {
             seriesInstance.setData([]);
@@ -243,36 +316,86 @@ export function LightweightChartCard({
         }
       }
     });
+  }, [series, isReady]);
 
-    // Update price scale - for probability charts, use 0-100 range
-    // Check if all series have data
-    const hasData = series.some(s => s.data.length > 0);
-    if (hasData) {
-      const allValues = series.flatMap(s => s.data.map(d => d.value));
-      if (allValues.length > 0) {
-        // Use autoScale with padding for probability charts (0-100%)
-        chartRef.current.priceScale('right').applyOptions({
-          autoScale: true,
+  // Apply memoized price scale config
+  useEffect(() => {
+    if (!chartRef.current || !isReady) return;
+    
+    if (priceScaleConfig) {
+      // Set price scale with calculated range
+      try {
+        const priceScale = chartRef.current.priceScale('right');
+        if (!priceScale) {
+          return;
+        }
+        
+        // Disable auto-scale and set the visible price range
+        priceScale.applyOptions({
+          autoScale: false,
           visible: true,
           scaleMargins: {
             top: 0.1,
             bottom: 0.1,
           },
         });
+        
+        // Set the visible price range using setVisibleRange
+        try {
+          priceScale.setVisibleRange({
+            from: priceScaleConfig.min,
+            to: priceScaleConfig.max,
+          });
+        } catch (rangeError) {
+          // If setting range fails, fallback to autoScale
+          console.warn('[LightweightChartCard] Could not set price scale range (using autoScale):', rangeError);
+          priceScale.applyOptions({
+            autoScale: true,
+            visible: true,
+            scaleMargins: {
+              top: 0.1,
+              bottom: 0.1,
+            },
+          });
+        }
+      } catch (error) {
+        console.error('[LightweightChartCard] Error setting price scale range:', error);
+        // Fallback to autoScale if setting range fails
+        try {
+          const priceScale = chartRef.current.priceScale('right');
+          if (priceScale) {
+            priceScale.applyOptions({
+              autoScale: true,
+              visible: true,
+              scaleMargins: {
+                top: 0.1,
+                bottom: 0.1,
+              },
+            });
+          }
+        } catch (fallbackError) {
+          console.warn('[LightweightChartCard] Error in price scale fallback:', fallbackError);
+        }
       }
     } else {
-      // If no data, set default 0-100 range
-      chartRef.current.priceScale('right').applyOptions({
-        autoScale: true,
-        visible: true,
-        scaleMargins: {
-          top: 0.1,
-          bottom: 0.1,
-        },
-      });
+      // If no data or invalid config, set default 0-100 range with autoScale
+      try {
+        const priceScale = chartRef.current.priceScale('right');
+        if (priceScale) {
+          priceScale.applyOptions({
+            autoScale: true,
+            visible: true,
+            scaleMargins: {
+              top: 0.1,
+              bottom: 0.1,
+            },
+          });
+        }
+      } catch (error) {
+        console.warn('[LightweightChartCard] Error setting default price scale:', error);
+      }
     }
-    
-  }, [series, isReady]);
+  }, [isReady, priceScaleConfig]);
 
   // Track if user has manually interacted with the chart (scrolled/zoomed)
   const userInteractedRef = useRef(false);
@@ -287,7 +410,8 @@ export function LightweightChartCard({
     const firstTime = sortedTimes[0];
     const lastTime = sortedTimes[sortedTimes.length - 1];
     
-    if (!firstTime || !lastTime) return null;
+    // Check for valid numbers (0 is a valid timestamp, so we check for NaN/undefined)
+    if (firstTime == null || lastTime == null || isNaN(firstTime) || isNaN(lastTime)) return null;
     
     // Calculate seconds to show based on timeframe
     let secondsToShow: number;
@@ -354,7 +478,9 @@ export function LightweightChartCard({
       previousTimeRangeRef.current = timeRange;
     }
     
-    const times = allData.map(d => Number(d.time));
+    const times = allData.map(d => Number(d.time)).filter(t => !isNaN(t) && t != null);
+    if (times.length === 0) return;
+    
     const visibleRange = calculateVisibleRange(times, timeRange);
     
     if (!visibleRange) return;
@@ -365,8 +491,31 @@ export function LightweightChartCard({
     // Use a timeout to debounce and prevent infinite loops
     const timeoutId = setTimeout(() => {
       try {
-        const timeScale = chartRef.current?.timeScale();
+        // Double-check chart is still available
+        if (!chartRef.current) {
+          isUpdatingRef.current = false;
+          return;
+        }
+        
+        const timeScale = chartRef.current.timeScale();
         if (!timeScale) {
+          isUpdatingRef.current = false;
+          return;
+        }
+        
+        // Double-check that visibleRange is valid before using it
+        if (!visibleRange || 
+            visibleRange.from == null || 
+            visibleRange.to == null ||
+            isNaN(Number(visibleRange.from)) ||
+            isNaN(Number(visibleRange.to))) {
+          isUpdatingRef.current = false;
+          return;
+        }
+        
+        // Ensure we have at least one series with data before setting visible range
+        const hasSeriesWithData = series.some(s => s.data.length > 0);
+        if (!hasSeriesWithData) {
           isUpdatingRef.current = false;
           return;
         }
@@ -376,7 +525,14 @@ export function LightweightChartCard({
         if (!userInteractedRef.current || timeframeChanged) {
           // Set visible range based on timeframe - this is the initial zoom
           // User can then scroll to see more data
-          timeScale.setVisibleRange(visibleRange);
+          // Wrap in try-catch to handle any timing issues
+          try {
+            timeScale.setVisibleRange(visibleRange);
+          } catch (rangeError) {
+            // If setting range fails, it might be because chart isn't ready yet
+            // Log but don't throw - this can happen during initialization
+            console.warn('[LightweightChartCard] Could not set visible range (chart may not be ready):', rangeError);
+          }
         }
         // Suppress debug logs to reduce console noise
       } catch (error) {
@@ -400,7 +556,15 @@ export function LightweightChartCard({
   useEffect(() => {
     if (!chartRef.current || !isReady) return;
     
-    const timeScale = chartRef.current.timeScale();
+    // Ensure chart is fully initialized before accessing time scale
+    let timeScale: ReturnType<typeof chartRef.current.timeScale> | null = null;
+    try {
+      timeScale = chartRef.current.timeScale();
+    } catch (error) {
+      console.warn('[LightweightChartCard] Could not access time scale:', error);
+      return;
+    }
+    
     if (!timeScale) return;
     
     // Track mouse down events to detect user scrolling/zooming
@@ -437,13 +601,18 @@ export function LightweightChartCard({
     };
     
     // Add mouse event listeners to detect user interactions
-    const chartContainer = chartRef.current.chartElement();
-    if (chartContainer) {
-      chartContainer.addEventListener('mousedown', handleMouseDown);
-      chartContainer.addEventListener('mouseup', handleMouseUp);
-      chartContainer.addEventListener('wheel', () => {
-        userInteractedRef.current = true;
-      });
+    let chartContainer: HTMLElement | null = null;
+    try {
+      chartContainer = chartRef.current.chartElement();
+      if (chartContainer) {
+        chartContainer.addEventListener('mousedown', handleMouseDown);
+        chartContainer.addEventListener('mouseup', handleMouseUp);
+        chartContainer.addEventListener('wheel', () => {
+          userInteractedRef.current = true;
+        });
+      }
+    } catch (error) {
+      console.warn('[LightweightChartCard] Could not access chart element:', error);
     }
     
     // Subscribe to visible range changes (this fires when user scrolls/zooms)
@@ -469,6 +638,10 @@ export function LightweightChartCard({
   // Setup tooltip
   useEffect(() => {
     if (!chartRef.current || !isReady) return;
+    
+    // Don't set up tooltip if there's no data
+    const hasData = series.some(s => s.data.length > 0);
+    if (!hasData) return;
 
     // Create tooltip element
     if (!tooltipRef.current) {
@@ -616,7 +789,7 @@ export function LightweightChartCard({
     <div
       ref={chartContainerRef}
       className={`w-full h-full ${className}`}
-      style={{ position: 'relative' }}
+      style={{ position: 'relative', overflow: 'hidden' }}
     >
       {/* Legend - Bottom Left */}
       {showLegend && ((allMarketsSeriesData && allMarketsSeriesData.length > 0) || series.length > 0) && (
@@ -674,15 +847,15 @@ export function LightweightChartCard({
         </div>
       )}
 
-      {/* Logo Overlay - Center */}
+      {/* Logo Overlay - Top Left */}
       <div
-        className="absolute inset-0 pointer-events-none flex items-center justify-center z-10"
-        style={{ opacity: 0.08 }}
+        className="absolute top-2 left-2 pointer-events-none z-10"
+        style={{ opacity: 0.072 }}
       >
         <img 
           src="https://turquoise-keen-koi-739.mypinata.cloud/ipfs/bafkreicizxxhlc64ifefhkv52bjbjjwgeuyt6qvrqlpg6f3gzofeayah6q"
           alt="Alithos Terminal"
-          className="h-8 sm:h-10 w-auto"
+          className="h-7 sm:h-9 w-auto"
           style={{ objectFit: 'contain' }}
         />
       </div>

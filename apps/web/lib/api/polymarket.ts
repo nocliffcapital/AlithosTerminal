@@ -78,6 +78,11 @@ export interface Market {
   eventId?: string; // ID of the parent event
   eventImageUrl?: string; // Event-level image (should be used for multimarkets)
   eventTitle?: string; // Event title/name
+  // Series information (Series → Events → Markets hierarchy)
+  seriesId?: string; // ID of the parent series
+  seriesTitle?: string; // Series title/name
+  seriesImageUrl?: string; // Series-level image
+  seriesSlug?: string; // Series slug
 }
 
 export interface MarketPrice {
@@ -92,8 +97,8 @@ export interface MarketPrice {
 export interface OrderBook {
   marketId: string;
   outcome: 'YES' | 'NO';
-  bids: { price: number; size: number }[];
-  asks: { price: number; size: number }[];
+  bids: { price: number; size: number; maker?: string }[];
+  asks: { price: number; size: number; maker?: string }[];
 }
 
 export interface Trade {
@@ -681,6 +686,14 @@ class PolymarketClient {
                       console.log(`[getMarkets] Assigning event image to multimarket "${market.question || market.id}":`, eventImage);
                     }
                     
+                    // Extract Series information (Events can belong to Series)
+                    // Series is an array, take the first one if available
+                    const series = Array.isArray(event.series) && event.series.length > 0 ? event.series[0] : null;
+                    const seriesId = series?.id?.toString() || event.seriesId?.toString() || event.series_id?.toString() || null;
+                    const seriesTitle = series?.title || series?.name || null;
+                    const seriesImageUrl = series?.image || series?.imageUrl || series?.icon || null;
+                    const seriesSlug = series?.slug || event.seriesSlug || null;
+                    
                     return {
                       ...market,
                       // Assign the matching tag slug as the category
@@ -692,6 +705,11 @@ class PolymarketClient {
                       eventId: event.id || event.slug || event.title,
                       eventImageUrl: eventImage,
                       eventTitle: event.title || event.name,
+                      // Store series information for Series-level grouping
+                      seriesId: seriesId || undefined,
+                      seriesTitle: seriesTitle || undefined,
+                      seriesImageUrl: seriesImageUrl || undefined,
+                      seriesSlug: seriesSlug || undefined,
                     };
                   });
                 }
@@ -867,6 +885,11 @@ class PolymarketClient {
               eventId: m.eventId,
               eventImageUrl: m.eventImageUrl,
               eventTitle: m.eventTitle,
+              // Preserve series information if available
+              seriesId: m.seriesId,
+              seriesTitle: m.seriesTitle,
+              seriesImageUrl: m.seriesImageUrl,
+              seriesSlug: m.seriesSlug,
             };
             });
           
@@ -905,15 +928,33 @@ class PolymarketClient {
             if (/^another\s+(?:company|movie|person|team|player|candidate|option|outcome|choice)/i.test(q)) return true;
             
             // Pattern: "someone else", "someone", "other", "others", etc. - generic placeholder outcomes
+            // Check both standalone and in "Will someone else..." questions
             if (/^(?:someone\s+else|someone|other|others|none|other\s+option|other\s+choice)$/i.test(q)) return true;
+            
+            // Pattern: "Will someone else..." - these are generic placeholder outcomes in multi-outcome markets
+            // This catches cases like "Will someone else be the 2025 Drivers Champion?"
+            if (/^Will\s+(?:someone\s+else|someone|other|others|none|other\s+option|other\s+choice)\s+(?:win|be|have)/i.test(q)) return true;
             
             return false;
           };
           
           // Filter out outcome tokens based on event structure
           let filtered = markets.filter((market) => {
+            const question = market.question || '';
+            
+            // Aggressively filter out "Will someone else..." questions - these are placeholder outcomes
+            // that shouldn't exist as standalone markets (they don't exist on Polymarket)
+            // Note: This does NOT filter out legitimate resolved markets like "Will [Driver Name] be..."
+            // which have real names and should be shown even if resolved to Yes/No
+            if (/^Will\s+(?:someone\s+else|someone|other|others|none|other\s+option|other\s+choice)\s+(?:win|be|have)/i.test(question)) {
+              // Always filter out "Will someone else..." questions - they're placeholder outcomes
+              return false;
+            }
+            
             // If market has generic name pattern, check if it's part of an event
-            if (market.eventId && isGenericOutcome(market.question || '')) {
+            // Note: Real markets with actual names (like driver names) won't match isGenericOutcome()
+            // so they'll pass through even if resolved
+            if (market.eventId && isGenericOutcome(question)) {
               const eventMarkets = marketsByEvent[market.eventId] || [];
               
               // If event has 3+ markets (multimarket), and this is a generic outcome, filter it out
@@ -926,12 +967,14 @@ class PolymarketClient {
                 
                 // If it's a generic outcome with no volume/liquidity, filter it out
                 // This catches "Person A", "Person B", "someone else", etc. in multimarkets
+                // Note: Resolved markets with real names will have volume and pass through
                 if (!hasAnyVolume && !hasAnyLiquidity) {
                   return false; // Filter out - likely an outcome token
                 }
                 
                 // Even if it has some volume, if it's very low (< $100) and it's a generic outcome in a multimarket, filter it
                 // Real markets in multimarkets typically have more activity
+                // Note: Resolved markets typically have significant historical volume, so they'll pass through
                 const hasVeryLowVolume = market.volume && market.volume > 0 && market.volume < 100;
                 const hasVeryLowLiquidity = market.liquidity && market.liquidity > 0 && market.liquidity < 10;
                 
@@ -942,7 +985,8 @@ class PolymarketClient {
             }
             
             // Also filter generic outcomes even if not part of an event (standalone generic outcomes)
-            if (!market.eventId && isGenericOutcome(market.question || '')) {
+            // Note: Real markets with actual names won't match isGenericOutcome() so they'll pass through
+            if (!market.eventId && isGenericOutcome(question)) {
               // If it has no volume/liquidity and is a generic outcome, likely filter it out
               const hasAnyVolume = market.volume && market.volume > 0;
               const hasAnyLiquidity = market.liquidity && market.liquidity > 0;
@@ -952,7 +996,7 @@ class PolymarketClient {
               }
             }
             
-            return true; // Keep the market
+            return true; // Keep the market (including resolved markets with real names)
             });
           
           // Filter by category if specified (flexible matching to handle variations)
@@ -1474,6 +1518,17 @@ class PolymarketClient {
               liquidity: m.liquidityNum || parseFloat(m.liquidity) || undefined,
               outcomePrices,
             };
+          })
+          .filter((m: Market) => {
+            // Filter out resolved markets (YES price is 0 or 1, or NO price is 0 or 1)
+            if (m.outcomePrices) {
+              const yesPrice = m.outcomePrices.YES;
+              const noPrice = m.outcomePrices.NO;
+              if (yesPrice === 0 || yesPrice === 1 || noPrice === 0 || noPrice === 1) {
+                return false; // Filter out resolved markets
+              }
+            }
+            return true;
           });
         
         let filtered = markets;
@@ -1662,6 +1717,15 @@ class PolymarketClient {
         volume: rawMarket.volumeNum || parseFloat(rawMarket.volume) || undefined,
         liquidity: rawMarket.liquidityNum || parseFloat(rawMarket.liquidity) || undefined,
         outcomePrices,
+        // Include event info if available in raw response
+        eventId: rawMarket.eventId || undefined,
+        eventImageUrl: rawMarket.eventImageUrl || rawMarket.eventImage || undefined,
+        eventTitle: rawMarket.eventTitle || rawMarket.eventName || undefined,
+        // Include series info if available in raw response
+        seriesId: rawMarket.seriesId || rawMarket.series_id || (Array.isArray(rawMarket.series) && rawMarket.series.length > 0 ? rawMarket.series[0]?.id?.toString() : undefined),
+        seriesTitle: rawMarket.seriesTitle || rawMarket.series_title || (Array.isArray(rawMarket.series) && rawMarket.series.length > 0 ? rawMarket.series[0]?.title || rawMarket.series[0]?.name : undefined),
+        seriesImageUrl: rawMarket.seriesImageUrl || rawMarket.series_image_url || (Array.isArray(rawMarket.series) && rawMarket.series.length > 0 ? rawMarket.series[0]?.image || rawMarket.series[0]?.imageUrl || rawMarket.series[0]?.icon : undefined),
+        seriesSlug: rawMarket.seriesSlug || rawMarket.series_slug || (Array.isArray(rawMarket.series) && rawMarket.series.length > 0 ? rawMarket.series[0]?.slug : undefined),
       };
 
       // Try to enrich with CLOB data for token IDs (needed for fast price history)
@@ -1677,6 +1741,56 @@ class PolymarketClient {
         } catch (clobError) {
           // Non-critical error - we can still use the market without CLOB tokens
           console.warn(`[getMarket] Could not enrich with CLOB tokens (non-critical):`, clobError);
+        }
+      }
+
+      // Try to find event info if not already present (for multi-market detection)
+      // Only do this on server-side to avoid CORS, and only if eventId is missing
+      if (!market.eventId && typeof window === 'undefined') {
+        try {
+          const eventsUrl = `${GAMMA_API_BASE}/events?active=true&closed=false&limit=200`;
+          const eventsResponse = await fetch(eventsUrl, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(8000), // 8 second timeout
+          });
+          
+          if (eventsResponse.ok) {
+            const events = await eventsResponse.json();
+            // Find the event that contains this market
+            for (const event of events) {
+              if (event.markets && Array.isArray(event.markets)) {
+                const marketInEvent = event.markets.find((m: any) => 
+                  m.id?.toString() === id || 
+                  m.id?.toString() === market.id ||
+                  m.conditionId?.toLowerCase() === market.conditionId?.toLowerCase()
+                );
+                
+                if (marketInEvent && event.id) {
+                  market.eventId = event.id.toString();
+                  market.eventTitle = event.title || event.name || undefined;
+                  market.eventImageUrl = event.imageUrl || event.image || event.icon || undefined;
+                  
+                  // Extract Series information (Events can belong to Series)
+                  // Series is an array, take the first one if available
+                  const series = Array.isArray(event.series) && event.series.length > 0 ? event.series[0] : null;
+                  if (series) {
+                    market.seriesId = series.id?.toString() || undefined;
+                    market.seriesTitle = series.title || series.name || undefined;
+                    market.seriesImageUrl = series.image || series.imageUrl || series.icon || undefined;
+                    market.seriesSlug = series.slug || undefined;
+                  } else if (event.seriesId || event.series_id) {
+                    market.seriesId = (event.seriesId || event.series_id)?.toString() || undefined;
+                  }
+                  
+                  break;
+                }
+              }
+            }
+          }
+        } catch (eventSearchError: any) {
+          // Non-critical - market can still be used without event info
+          // Suppress verbose error logs
         }
       }
 
@@ -2362,64 +2476,109 @@ class PolymarketClient {
         // Suppress verbose debug logs
         try {
           // CLOB API prices-history endpoint (public, no auth needed for reads)
-          // Use interval parameter instead of startTs/endTs (Polymarket API requirement)
-          let url = `${CLOB_API_BASE}/prices-history?market=${tokenId}&interval=${interval}`;
-          if (fidelity !== undefined) {
-            url += `&fidelity=${fidelity}`;
-          }
-          // Suppress verbose debug logs
+          // For 'max' interval, we need to paginate to get all historical data
+          // The API might limit 'max' to ~1 month, so we'll fetch in chunks
+          let allHistory: Array<{ t: number; p: number }> = [];
           
-          // Add timeout to prevent hanging on connection timeouts
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-          
-          try {
-            const response = await fetch(url, {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              signal: controller.signal,
-            });
-            clearTimeout(timeoutId);
+          if (interval === 'max') {
+            // First, try interval='max' to get what the API gives us
+            const url = `${CLOB_API_BASE}/prices-history?market=${tokenId}&interval=${interval}`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            try {
+              const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                signal: controller.signal,
+              });
+              clearTimeout(timeoutId);
 
-            if (response.ok) {
-              const data = await response.json() as { history?: Array<{ t: number; p: number }> };
-
-              if (data.history && data.history.length > 0) {
-                const sortedHistory = [...data.history].sort((a, b) => a.t - b.t); // Sort by timestamp
-                
-                const firstDate = new Date(sortedHistory[0].t * 1000);
-                const lastDate = new Date(sortedHistory[sortedHistory.length - 1].t * 1000);
-                const actualTimeSpan = lastDate.getTime() - firstDate.getTime();
-                
-                // Suppress verbose success logs
-                
-                // Convert to our format: { timestamp, price }
-                // t is timestamp in seconds, p is price
-                const converted = sortedHistory.map((point) => ({
-                  timestamp: point.t * 1000, // Convert to milliseconds
-                  price: point.p, // Price is already in 0-1 format
-                }));
-                
-                // Suppress verbose success logs
-                return converted;
-              } else {
-                console.warn(`[getHistoricalPrices] CLOB API returned empty history array - will fallback to trades`);
+              if (response.ok) {
+                const data = await response.json() as { history?: Array<{ t: number; p: number }> };
+                if (data.history && data.history.length > 0) {
+                  allHistory = data.history;
+                  
+                  // Note: The Polymarket CLOB API appears to limit interval='max' to approximately 1 month
+                  // We'll return what we get from CLOB API, and the trades fallback will supplement if needed
+                  // The trades fallback in useHistoricalPrices will handle pagination for complete history
+                }
               }
-            } else {
-              const errorText = await response.text().catch(() => '');
-              console.warn(`[getHistoricalPrices] CLOB API returned ${response.status}: ${errorText.substring(0, 200)}`);
+            } catch (fetchError: any) {
+              clearTimeout(timeoutId);
             }
-          } catch (fetchError: any) {
-            clearTimeout(timeoutId);
-            if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout')) {
-              console.warn('[getHistoricalPrices] CLOB API request timed out after 10 seconds - will fallback to trades');
-            } else if (fetchError.message?.includes('Failed to fetch') || fetchError.message?.includes('ERR_CONNECTION_TIMED_OUT')) {
-              console.warn('[getHistoricalPrices] CLOB API connection failed/timed out - will fallback to trades');
-            } else {
-              console.error('[getHistoricalPrices] CLOB API prices-history failed:', fetchError);
+            
+            // If we got data but it's incomplete, try paginating with interval='1m' (monthly chunks)
+            // This is a workaround since startTs/endTs might not be supported
+            if (allHistory.length > 0) {
+              const sortedHistory = [...allHistory].sort((a, b) => a.t - b.t);
+              const earliestTimestamp = sortedHistory[0].t;
+              const now = Math.floor(Date.now() / 1000);
+              const daysSinceEarliest = (now - earliestTimestamp) / (24 * 60 * 60);
+              
+              // If the earliest data is recent (less than 2 months old), we might have complete data
+              // But if it's older, we need to try fetching more
+              if (daysSinceEarliest > 60) {
+                // Try fetching with interval='1m' going backwards
+                // Note: This might not work if the API doesn't support date ranges
+                // But it's worth trying before falling back to trades
+                console.warn(`[getHistoricalPrices] CLOB API data appears incomplete (earliest: ${new Date(earliestTimestamp * 1000).toISOString()}), but API may not support pagination. Returning what we have - trades fallback will fetch complete history.`);
+                // Return what we have - the trades fallback will handle getting complete data
+              }
             }
+          } else {
+            // For non-max intervals, use the standard approach
+            let url = `${CLOB_API_BASE}/prices-history?market=${tokenId}&interval=${interval}`;
+            if (fidelity !== undefined) {
+              url += `&fidelity=${fidelity}`;
+            }
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            try {
+              const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                signal: controller.signal,
+              });
+              clearTimeout(timeoutId);
+
+              if (response.ok) {
+                const data = await response.json() as { history?: Array<{ t: number; p: number }> };
+                if (data.history && data.history.length > 0) {
+                  allHistory = data.history;
+                }
+              }
+            } catch (fetchError: any) {
+              clearTimeout(timeoutId);
+            }
+          }
+          
+          if (allHistory.length > 0) {
+            const sortedHistory = [...allHistory].sort((a, b) => a.t - b.t); // Sort by timestamp
+            
+            const firstDate = new Date(sortedHistory[0].t * 1000);
+            const lastDate = new Date(sortedHistory[sortedHistory.length - 1].t * 1000);
+            const actualTimeSpan = lastDate.getTime() - firstDate.getTime();
+            
+            // Suppress verbose success logs
+            
+            // Convert to our format: { timestamp, price }
+            // t is timestamp in seconds, p is price
+            const converted = sortedHistory.map((point) => ({
+              timestamp: point.t * 1000, // Convert to milliseconds
+              price: point.p, // Price is already in 0-1 format
+            }));
+            
+            // Suppress verbose success logs
+            return converted;
+          } else {
+            console.warn(`[getHistoricalPrices] CLOB API returned empty history array - will fallback to trades`);
           }
         } catch (clobError) {
           console.error('[getHistoricalPrices] CLOB API prices-history failed:', clobError);
@@ -2539,6 +2698,7 @@ class PolymarketClient {
       ascending?: boolean;
       getPositions?: boolean;
       holdersOnly?: boolean;
+      // Note: Wallet address removed - Polymarket comments API doesn't require authentication
     }
   ): Promise<any[]> {
     try {
@@ -2550,16 +2710,29 @@ class PolymarketClient {
       }
 
       // Try different entity type formats based on Polymarket API documentation
-      // The docs show: Event, Series, market (lowercase)
-      const entityTypes = ['market', 'Market', 'Series']; // Try lowercase first, then others
+      // According to https://docs.polymarket.com/api-reference/comments/list-comments
+      // Valid entity types are: Event, Series, market (lowercase)
+      // IMPORTANT: Comments are often on Series level, not Event level
+      // Try Series first, then Event, then market
+      // IMPORTANT: We must try ALL entity types even if we get empty arrays, because
+      // an empty array might mean "wrong entity type" not "no comments"
+      const entityTypes = ['Series', 'Event', 'market']; // Try Series first (most common), then Event, then market
+      
+      let lastError: any = null;
+      let lastEmptyArrayEntityType: string | null = null;
       
       for (const entityType of entityTypes) {
         try {
+          // According to Polymarket API docs, limit and offset are required (>= 0)
+          // Default to limit=100, offset=0 if not provided
+          const limit = params?.limit !== undefined ? params.limit : 100;
+          const offset = params?.offset !== undefined ? params.offset : 0;
+          
           const queryParams = new URLSearchParams({
             parent_entity_type: entityType,
             parent_entity_id: marketIdInt.toString(),
-            ...(params?.limit !== undefined && { limit: params.limit.toString() }),
-            ...(params?.offset !== undefined && { offset: params.offset.toString() }),
+            limit: limit.toString(),
+            offset: offset.toString(),
             ...(params?.order && { order: params.order }),
             ...(params?.ascending !== undefined && { ascending: params.ascending.toString() }),
             ...(params?.getPositions !== undefined && { get_positions: params.getPositions.toString() }),
@@ -2567,12 +2740,21 @@ class PolymarketClient {
           });
 
           const url = `/comments?${queryParams.toString()}`;
-          const response = await fetch(`${GAMMA_API_BASE}${url}`, {
+          const fullUrl = `${GAMMA_API_BASE}${url}`;
+          console.log(`[getComments] Trying entity type "${entityType}" for ID ${marketIdInt}: ${fullUrl}`);
+          
+          // According to Polymarket API docs, no authentication is required for listing comments
+          // Comments are public and don't require wallet address
+          const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+          };
+          
+          const response = await fetch(fullUrl, {
             method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers,
           });
+          
+          console.log(`[getComments] Response status for "${entityType}": ${response.status} ${response.statusText}`);
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -2588,20 +2770,39 @@ class PolymarketClient {
               errorData.error.includes('invalid entity type') || 
               errorData.error.includes('entity type')
             )) {
-              console.log(`[getComments] Entity type "${entityType}" not valid, trying next...`);
+              console.log(`[getComments] Entity type "${entityType}" not valid for ID ${marketIdInt}, trying next...`);
+              lastError = errorData;
+              continue;
+            }
+            
+            // If it's a 404 or "not found", try next type (might be wrong entity type)
+            if (response.status === 404 || errorData.error?.includes('not found')) {
+              console.log(`[getComments] 404/not found for "${entityType}" with ID ${marketIdInt}, trying next entity type...`);
+              lastError = errorData;
               continue;
             }
             
             // If it's a different error, log it but continue to try other types
-            console.warn(`[getComments] API error with ${entityType}:`, errorData.error);
+            console.warn(`[getComments] API error with ${entityType} for ID ${marketIdInt}:`, errorData.error || errorData);
+            lastError = errorData;
             continue;
           }
 
           const comments = await response.json();
+          const responsePreview = typeof comments === 'object' ? JSON.stringify(comments).substring(0, 300) : String(comments);
+          console.log(`[getComments] Response body for "${entityType}":`, responsePreview);
           
-          // If we get a valid response (array), return it
+          // If we get a valid response (array), check if it has comments
           if (Array.isArray(comments)) {
-            return comments;
+            if (comments.length > 0) {
+              console.log(`[getComments] ✅ Successfully fetched ${comments.length} comments for ID ${marketIdInt} using entity type "${entityType}"`);
+              return comments;
+            } else {
+              // Empty array - might mean wrong entity type, so continue trying
+              console.log(`[getComments] ⚠️ Empty array returned for "${entityType}" with ID ${marketIdInt} - will try other entity types`);
+              lastEmptyArrayEntityType = entityType;
+              continue; // Try next entity type
+            }
           }
           
           // If we get an error object, check if it's an "invalid entity type" error
@@ -2609,24 +2810,44 @@ class PolymarketClient {
             const errorMsg = (comments as any).error || '';
             if (errorMsg.includes('invalid entity type') || errorMsg.includes('entity type')) {
               // Try next entity type
+              console.log(`[getComments] Entity type "${entityType}" not valid for ID ${marketIdInt}, trying next...`);
+              lastError = comments;
               continue;
             }
-            // If it's a different error, throw it
-            throw new Error(errorMsg);
+            // If it's a "not found" or "no comments" error, try next entity type
+            if (errorMsg.includes('not found') || errorMsg.includes('No comments') || errorMsg.includes('404')) {
+              console.log(`[getComments] No comments found for ID ${marketIdInt} using entity type "${entityType}", trying next...`);
+              lastError = comments;
+              continue;
+            }
+            // If it's a different error, log it but continue
+            console.warn(`[getComments] Error object for "${entityType}":`, errorMsg);
+            lastError = comments;
+            continue;
           }
         } catch (error: any) {
           // If it's an "invalid entity type" error, try next type
           if (error.message?.includes('invalid entity type') || 
               error.message?.includes('entity type')) {
+            console.log(`[getComments] Invalid entity type error for "${entityType}", trying next...`);
+            lastError = error;
             continue;
           }
-          // Otherwise, re-throw
-          throw error;
+          // Network errors - log but continue
+          console.warn(`[getComments] Error trying "${entityType}" for ID ${marketIdInt}:`, error.message);
+          lastError = error;
+          continue;
         }
       }
       
-      // If all entity types failed, return empty array
-      console.warn(`[getComments] All entity types failed for market ID: ${marketIdInt}`);
+      // If all entity types failed or returned empty arrays, log warning
+      if (lastEmptyArrayEntityType) {
+        console.warn(`[getComments] All entity types returned empty arrays for ID ${marketIdInt}. Last tried: ${lastEmptyArrayEntityType}`);
+      } else if (lastError) {
+        console.warn(`[getComments] All entity types failed for ID ${marketIdInt}. Last error:`, lastError);
+      } else {
+        console.warn(`[getComments] All entity types failed for ID ${marketIdInt} - no comments found`);
+      }
       return [];
     } catch (error) {
       console.error('[getComments] Error fetching comments:', error);

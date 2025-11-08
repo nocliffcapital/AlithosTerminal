@@ -138,7 +138,7 @@ function OrderHistoryCardComponent() {
                 setFilter(f);
                 setPage(0);
               }}
-              className="text-xs h-6 px-2 capitalize"
+              className="text-xs px-2 capitalize"
             >
               {f}
             </Button>
@@ -147,7 +147,7 @@ function OrderHistoryCardComponent() {
       </div>
 
       {/* Orders List */}
-      <div className="flex-1 overflow-auto space-y-1">
+      <div className="flex-1 overflow-auto space-y-2">
         {orders.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center text-sm text-muted-foreground">
@@ -159,7 +159,7 @@ function OrderHistoryCardComponent() {
           orders.map((order) => (
             <div
               key={order.id}
-              className="flex items-center gap-2 p-2 rounded border border-border hover:bg-muted/50 transition-colors"
+              className="flex items-center gap-2 p-3 rounded border border-border hover:bg-muted/50 transition-colors duration-200"
             >
               <div className="flex-shrink-0">
                 {getStatusIcon(order.status)}

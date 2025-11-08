@@ -58,6 +58,25 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: 'rlig' 1, 'calt' 1;
+    /* Disable text selection to prevent highlighting during drag operations */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Allow text selection in input fields, textareas, and editable content */
+  input,
+  textarea,
+  [contenteditable="true"],
+  [contenteditable],
+  .selectable,
+  pre,
+  code {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
   }
   
   /* Typography hierarchy - professional sans-serif */
