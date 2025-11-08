@@ -113,7 +113,7 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
     };
 
     // Update progress every 50ms
-    progressInterval = setInterval(updateProgress, 50);
+    const progressInterval = setInterval(updateProgress, 50);
 
     // Cycle through stages
     const cycleStage = () => {

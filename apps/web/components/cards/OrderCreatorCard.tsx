@@ -156,9 +156,9 @@ function OrderCreatorCardComponent() {
     };
   };
 
-  const impact = calculateImpact();
-
   const [showLimitSettings, setShowLimitSettings] = useState(false);
+  
+  const impact = calculateImpact();
 
   return (
     <div className="h-full flex flex-col p-4 space-y-4 overflow-y-auto">

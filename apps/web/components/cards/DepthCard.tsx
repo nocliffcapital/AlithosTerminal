@@ -126,6 +126,18 @@ function DepthCardComponent() {
     );
   }
 
+  // Calculate liquidity metrics (before early returns to avoid conditional hooks)
+  const metrics = useMemo(() => {
+    if (!orderBook) return { midPrice: 0, spread: 0, totalLiquidity: 0 };
+    return calculateLiquidityMetrics(orderBook.bids, orderBook.asks);
+  }, [orderBook?.bids, orderBook?.asks]);
+
+  // Calculate price impact for common trade sizes
+  const impactSizes = useMemo(() => {
+    if (!orderBook || metrics.midPrice <= 0) return { buy: [], sell: [] };
+    return calculateCommonImpactSizes(orderBook.bids, orderBook.asks, metrics.midPrice);
+  }, [orderBook?.bids, orderBook?.asks, metrics.midPrice]);
+
   if (!orderBook) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm gap-2 p-4">
@@ -167,19 +179,6 @@ function DepthCardComponent() {
         .reduce((sum, a) => sum + a.size, 0),
     })),
   ];
-
-  // Calculate liquidity metrics
-  const metrics = useMemo(() => {
-    return calculateLiquidityMetrics(orderBook.bids, orderBook.asks);
-  }, [orderBook.bids, orderBook.asks]);
-
-  // Calculate price impact for common trade sizes
-  const impactSizes = useMemo(() => {
-    if (metrics.midPrice > 0) {
-      return calculateCommonImpactSizes(orderBook.bids, orderBook.asks, metrics.midPrice);
-    }
-    return { buy: [], sell: [] };
-  }, [orderBook.bids, orderBook.asks, metrics.midPrice]);
 
   const formatCurrency = (value: number) => {
     if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;

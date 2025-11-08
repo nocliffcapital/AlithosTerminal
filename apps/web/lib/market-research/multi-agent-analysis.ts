@@ -238,7 +238,7 @@ function parseResearchOutput(output: string, market: Market): ValyuResult[] {
     const title = titleMatch?.[1]?.trim() || 'Research Source';
     let url = urlMatch?.[1]?.trim();
     const content = contentMatch?.[1]?.trim() || block.trim();
-    let publishedDate = dateMatch?.[1]?.trim();
+    const publishedDate = dateMatch?.[1]?.trim();
     let domain = domainMatch?.[1]?.trim();
     
     // If no URL provided, try to extract from content

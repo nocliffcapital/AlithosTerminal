@@ -69,7 +69,7 @@ export function DepositModal({ open, onOpenChange }: DepositModalProps) {
             <div className="text-xs text-muted-foreground">Instructions:</div>
             <ol className="list-decimal list-inside space-y-1.5 text-sm text-muted-foreground ml-2">
               <li>Send USDC to the address above</li>
-              <li>Ensure you're on Polygon network</li>
+              <li>Ensure you&apos;re on Polygon network</li>
               <li>Wait for confirmation (usually 1-2 minutes)</li>
               <li>Your balance will update automatically</li>
             </ol>

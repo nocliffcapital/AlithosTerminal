@@ -484,7 +484,7 @@ function WatchlistCardComponent({ marketIds: propMarketIds }: WatchlistCardProps
         </div>
         {searchQuery && !hasFilteredItems && (
           <div className="text-xs text-muted-foreground text-center py-1">
-            No results found for "{searchQuery}"
+            No results found for &quot;{searchQuery}&quot;
           </div>
         )}
       </div>

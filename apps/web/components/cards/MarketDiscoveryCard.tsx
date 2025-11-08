@@ -1066,7 +1066,7 @@ function MarketDiscoveryCardComponent() {
         </div>
         {searchQuery && groupedMarkets.length === 0 && !isLoading && (
           <div className="text-xs text-muted-foreground text-center py-1">
-            No results found for "{searchQuery}"
+            No results found for &quot;{searchQuery}&quot;
           </div>
         )}
       </div>

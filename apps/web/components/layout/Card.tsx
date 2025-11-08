@@ -3,6 +3,7 @@
 import React, { Suspense } from 'react';
 import { CardConfig } from '@/stores/layout-store';
 import { Maximize2, Minimize2, X, Loader2, Settings, Search, Link2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useLayoutStore } from '@/stores/layout-store';
 import { useWorkspaces } from '@/lib/hooks/useWorkspace';
 import { useMarket, useMarkets } from '@/lib/hooks/usePolymarketData';

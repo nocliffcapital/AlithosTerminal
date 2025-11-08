@@ -141,18 +141,10 @@ export function WorkspaceGrid() {
     });
   }, [maxRows]);
 
-  if (!currentLayout) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <p className="text-muted-foreground">No workspace selected</p>
-      </div>
-    );
-  }
-
   // Only include non-minimized and non-maximized cards in the grid layout
   const gridCards = useMemo(
-    () => currentLayout.cards.filter((card) => !card.isMinimized && !card.isMaximized),
-    [currentLayout.cards]
+    () => currentLayout?.cards.filter((card) => !card.isMinimized && !card.isMaximized) || [],
+    [currentLayout?.cards]
   );
 
   // Memoize layouts to prevent recalculation on every render
@@ -168,8 +160,8 @@ export function WorkspaceGrid() {
 
   // Memoize cards to render to prevent unnecessary re-renders
   const cardsToRender = useMemo(
-    () => currentLayout.cards.filter((card) => !card.isMaximized),
-    [currentLayout.cards]
+    () => currentLayout?.cards.filter((card) => !card.isMaximized) || [],
+    [currentLayout?.cards]
   );
 
   // Optimize drag handler with useCallback
@@ -295,6 +287,15 @@ export function WorkspaceGrid() {
       }
     }, 0);
   }, [isLocked, updateLayout, adjustLayout]);
+
+  // Early return after all hooks are called
+  if (!currentLayout) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-muted-foreground">No workspace selected</p>
+      </div>
+    );
+  }
 
   return (
     <ContextMenu>
