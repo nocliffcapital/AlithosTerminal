@@ -94,7 +94,6 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
 
     let currentStageIndex = 0;
     let stageStartTime = Date.now();
-    let progressInterval: NodeJS.Timeout;
     let stageTimeout: NodeJS.Timeout;
 
     const updateProgress = () => {
