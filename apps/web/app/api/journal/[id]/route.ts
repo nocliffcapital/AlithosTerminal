@@ -90,10 +90,10 @@ export async function PUT(
       updateData.note = validatedData.note;
     }
     if (validatedData.attachments !== undefined) {
-      updateData.attachments = validatedData.attachments ?? Prisma.JsonNull;
+      updateData.attachments = (validatedData.attachments ?? Prisma.JsonNull) as Prisma.InputJsonValue;
     }
     if (validatedData.postMortem !== undefined) {
-      updateData.postMortem = validatedData.postMortem ?? Prisma.JsonNull;
+      updateData.postMortem = (validatedData.postMortem ?? Prisma.JsonNull) as Prisma.InputJsonValue;
     }
 
     const entry = await prisma.journalEntry.update({

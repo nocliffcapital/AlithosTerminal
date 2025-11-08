@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         timestamp: new Date(validatedData.timestamp),
         note: validatedData.note,
         ...(validatedData.attachments !== undefined && {
-          attachments: validatedData.attachments ?? Prisma.JsonNull,
+          attachments: (validatedData.attachments ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         }),
       },
     });
