@@ -1,0 +1,18 @@
+[build]
+  # Base directory for the build
+  base = "."
+  
+  # Build command - runs from root, generates Prisma Client, then builds Next.js app
+  # The build script in apps/web/package.json already includes prisma generate
+  command = "cd apps/web && npm run build"
+  
+  # Publish directory (Next.js output)
+  publish = "apps/web/.next"
+
+[build.environment]
+  # Node version
+  NODE_VERSION = "20"
+  
+  # Ensure DATABASE_URL is set in Netlify environment variables
+  # This should be configured in Netlify dashboard under Site settings > Environment variables
+
