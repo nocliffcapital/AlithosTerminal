@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { Alert, AlertCondition, AlertAction } from '@/lib/alerts/alert-system';
 import { createAlertSchema, getAlertsQuerySchema, formatZodError } from '@/lib/validators';
 
@@ -125,8 +126,8 @@ export async function POST(request: NextRequest) {
       data: {
         userId,
         name,
-        conditions: conditionsWithMarketId as any,
-        actions: actions as any,
+        conditions: conditionsWithMarketId as Prisma.InputJsonValue,
+        actions: actions as Prisma.InputJsonValue,
         isActive: isActive ?? true,
         cooldownPeriodMinutes: cooldownPeriodMinutes ?? null,
       },

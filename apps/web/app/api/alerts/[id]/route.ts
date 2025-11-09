@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { Alert, AlertCondition, AlertAction } from '@/lib/alerts/alert-system';
 import { updateAlertSchema, userIdSchema, formatZodError, idParamSchema } from '@/lib/validators';
 
@@ -169,18 +170,18 @@ export async function PUT(
         marketId,
       };
 
-      updateData.conditions = conditionsWithMarketId as any;
+      updateData.conditions = conditionsWithMarketId as Prisma.InputJsonValue;
     } else if (marketId !== undefined) {
       // Update marketId in existing conditions
       const existingConditions = (existingAlert.conditions as any) || {};
       updateData.conditions = {
         ...existingConditions,
         marketId,
-      } as any;
+      } as Prisma.InputJsonValue;
     }
 
     if (actions !== undefined) {
-      updateData.actions = actions as any;
+      updateData.actions = actions as Prisma.InputJsonValue;
     }
 
     if (cooldownPeriodMinutes !== undefined) {

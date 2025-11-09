@@ -8,6 +8,7 @@ import { runMultiAgentAnalysis, runResearchAgent, EventContext } from '@/lib/mar
 import { applyBayesianReasoning } from '@/lib/market-research/bayesian-reasoning';
 import { FinalVerdict, MarketResearchResult, GradedSource, ValyuResult } from '@/lib/market-research/types';
 import { getPrismaClient } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -225,8 +226,8 @@ async function handler(request: NextRequest) {
           marketQuestion: market.question || '',
           verdict,
           confidence: bayesianResult.confidence,
-          result: result as any,
-          intermediateResults: intermediateResults as any,
+          result: result as Prisma.InputJsonValue,
+          intermediateResults: intermediateResults ? (intermediateResults as Prisma.InputJsonValue) : null,
         },
       });
       console.log('[Market Research] Result stored in database');
