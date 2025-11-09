@@ -107,11 +107,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-accent/20 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs sm:text-sm font-semibold">News</div>
-        </div>
-        
+      <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-accent/20">
         {/* Controls */}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 items-stretch sm:items-center">
           <div className="flex items-center gap-2 flex-1">
@@ -151,7 +147,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
       </div>
 
       {/* News List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {isLoading ? (
           <div className="flex items-center justify-center h-32 sm:h-48">
             <LoadingSpinner size="sm" text="Loading news..." />
@@ -190,62 +186,60 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
           newsData.data.map((article) => (
             <div
               key={article.url}
-              className="p-3 bg-transparent hover:bg-accent/20 border border-border/50 hover:border-border transition-colors duration-200 rounded"
+              className="py-2 border-b border-border/30 last:border-b-0 hover:bg-accent/10 transition-colors duration-200"
             >
-              <div className="space-y-2">
-                {/* Title */}
-                <a
-                  href={article.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block group"
-                >
-                  <h3 className="text-xs sm:text-sm font-semibold leading-tight sm:leading-normal line-clamp-2 group-hover:text-primary transition-colors">
-                    {article.title}
-                  </h3>
-                </a>
+              {/* Title */}
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block group mb-1"
+              >
+                <h3 className="text-xs sm:text-sm font-semibold leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                  {article.title}
+                </h3>
+              </a>
 
-                {/* Snippet */}
-                {article.snippet && (
-                  <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2">
-                    {article.snippet}
-                  </p>
-                )}
+              {/* Snippet */}
+              {article.snippet && (
+                <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-2 mb-1.5">
+                  {article.snippet}
+                </p>
+              )}
 
-                {/* Metadata */}
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  {/* Domain */}
-                  <div className="flex items-center gap-1">
-                    <ExternalLink className="h-3 w-3" />
-                    <span className="truncate max-w-[120px] sm:max-w-none">
-                      {article.domain}
-                    </span>
-                  </div>
-
-                  {/* Published Date */}
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    <span>{formatDate(article.publishedDate)}</span>
-                  </div>
-
-                  {/* Author */}
-                  {article.author && (
-                    <div className="flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      <span className="truncate max-w-[100px]">{article.author}</span>
-                    </div>
-                  )}
+              {/* Metadata and Link */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-xs text-muted-foreground">
+                {/* Domain */}
+                <div className="flex items-center gap-1">
+                  <ExternalLink className="h-2.5 w-2.5" />
+                  <span className="truncate max-w-[120px] sm:max-w-none">
+                    {article.domain}
+                  </span>
                 </div>
 
-                {/* Link Button */}
+                {/* Published Date */}
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-2.5 w-2.5" />
+                  <span>{formatDate(article.publishedDate)}</span>
+                </div>
+
+                {/* Author */}
+                {article.author && (
+                  <div className="flex items-center gap-1">
+                    <User className="h-2.5 w-2.5" />
+                    <span className="truncate max-w-[100px]">{article.author}</span>
+                  </div>
+                )}
+
+                {/* Link */}
                 <a
                   href={article.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors duration-200"
+                  className="ml-auto inline-flex items-center gap-1 text-primary hover:text-primary/80 transition-colors"
                 >
-                  Read article
-                  <ExternalLink className="h-3 w-3" />
+                  Read
+                  <ExternalLink className="h-2.5 w-2.5" />
                 </a>
               </div>
             </div>
