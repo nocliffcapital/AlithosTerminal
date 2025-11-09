@@ -227,7 +227,9 @@ async function handler(request: NextRequest) {
           verdict,
           confidence: bayesianResult.confidence,
           result: result as unknown as Prisma.InputJsonValue,
-          intermediateResults: intermediateResults ? (intermediateResults as Prisma.InputJsonValue) : null,
+          intermediateResults: intermediateResults
+            ? (intermediateResults as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
         },
       });
       console.log('[Market Research] Result stored in database');
