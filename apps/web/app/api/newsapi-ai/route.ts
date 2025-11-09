@@ -269,33 +269,31 @@ export async function GET(request: NextRequest) {
         searchTime: data.searchTime || new Date().toISOString(),
         ...(excludeDomains && { excludeDomains: excludeDomains.split(',').map(d => d.trim()) }),
         ...(includeDomains && { includeDomains: includeDomains.split(',').map(d => d.trim()) }),
+        ...(process.env.NODE_ENV === 'development' && {
+          debug: {
+            keywordsReceived: keywords,
+            keywordArray: keywordArray,
+            keywordOper: 'or',
+            requestBody: requestBody,
+            rawResponseStructure: {
+              hasArticles: !!data.articles,
+              hasResults: !!data.results,
+              articlesType: typeof data.articles,
+              articlesKeys: data.articles ? Object.keys(data.articles) : [],
+              articlesResultsType: data.articles?.results ? typeof data.articles.results : 'none',
+              articlesResultsLength: data.articles?.results ? (Array.isArray(data.articles.results) ? data.articles.results.length : 'not array') : 'none',
+              totalResultsFromAPI: data.articles?.totalResults ?? data.totalResults ?? 'unknown',
+              totalResultsValue: data.articles?.totalResults,
+              totalResultsValue2: data.totalResults,
+              sampleArticle: data.articles?.results?.[0] || 'none',
+            },
+            fullResponseKeys: Object.keys(data),
+          },
+        }),
       },
     };
 
     console.log(`[NewsAPI.ai] ✅ Successfully fetched ${mappedArticles.length} news articles`);
-    
-    // Include debug info in development
-    if (process.env.NODE_ENV === 'development') {
-      responseData.meta.debug = {
-        keywordsReceived: keywords,
-        keywordArray: keywordArray,
-        keywordOper: 'or',
-        requestBody: requestBody,
-        rawResponseStructure: {
-          hasArticles: !!data.articles,
-          hasResults: !!data.results,
-          articlesType: typeof data.articles,
-          articlesKeys: data.articles ? Object.keys(data.articles) : [],
-          articlesResultsType: data.articles?.results ? typeof data.articles.results : 'none',
-          articlesResultsLength: data.articles?.results ? (Array.isArray(data.articles.results) ? data.articles.results.length : 'not array') : 'none',
-          totalResultsFromAPI: data.articles?.totalResults ?? data.totalResults ?? 'unknown',
-          totalResultsValue: data.articles?.totalResults,
-          totalResultsValue2: data.totalResults,
-          sampleArticle: data.articles?.results?.[0] || 'none',
-        },
-        fullResponseKeys: Object.keys(data),
-      };
-    }
     
     return NextResponse.json(responseData);
   } catch (error: any) {

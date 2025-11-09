@@ -190,10 +190,24 @@ function getFidelityForHours(hours: number): number {
  * @param hours - Number of hours to fetch (null = all time)
  */
 export function useHistoricalPrices(marketId: string | null, hours: number | null = 24) {
+  // Use a ref to track the marketId that was used for the current data
+  // This prevents showing stale data from a different market
+  const previousMarketIdRef = useRef<string | null>(null);
+  
+  // Update ref when marketId changes
+  useEffect(() => {
+    if (marketId !== previousMarketIdRef.current) {
+      previousMarketIdRef.current = marketId;
+    }
+  }, [marketId]);
+  
   return useQuery({
     queryKey: ['historical-prices', marketId, hours],
     queryFn: async () => {
       if (!marketId) return [];
+      
+      // Store the marketId we're fetching for
+      previousMarketIdRef.current = marketId;
       
       try {
         // FIRST: Try CLOB API prices-history endpoint (fastest, most efficient)
@@ -679,7 +693,20 @@ export function useHistoricalPrices(marketId: string | null, hours: number | nul
     staleTime: 10 * 60 * 1000, // 10 minutes - historical data doesn't change (increased from 5)
     gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes (increased from 10)
     refetchOnMount: false, // Don't refetch if data is fresh
-    placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)
+    // CRITICAL FIX: Only use placeholderData if marketId hasn't changed
+    // This prevents showing data from a different market when switching markets
+    placeholderData: (previousData) => {
+      // If marketId changed, don't show previous data (it's from a different market)
+      // React Query's queryKey changes when marketId changes, so previousData should be undefined
+      // But we add an extra check to be safe
+      const currentMarketId = previousMarketIdRef.current;
+      if (currentMarketId !== null && currentMarketId !== marketId) {
+        // Market changed - don't show stale data
+        return undefined;
+      }
+      // Only show previous data if it's for the same market (or if we're still loading)
+      return previousData;
+    },
     retry: 2,
     refetchOnWindowFocus: false,
   });

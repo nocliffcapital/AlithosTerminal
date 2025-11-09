@@ -573,9 +573,27 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
     // Sort by timestamp
     const sorted = [...historicalPrices].sort((a, b) => a.timestamp - b.timestamp);
     
+    // CRITICAL FIX: Validate data consistency - ensure historical prices match current price
+    // If the last historical price is very different from current price, it might be from a different market
+    const priceToUse = displayMarketPrice || currentPrice;
+    if (priceToUse && sorted.length > 0) {
+      const lastPoint = sorted[sorted.length - 1];
+      const lastPrice = lastPoint.probability != null ? lastPoint.probability : (lastPoint.price * 100);
+      const currentProb = priceToUse.probability;
+      const priceDifference = Math.abs(lastPrice - currentProb);
+      
+      // If prices differ by more than 50%, it's likely from a different market
+      // This is a safety check to prevent showing incorrect data
+      if (priceDifference > 50) {
+        console.warn(`[MarketTradeCard] Historical prices don't match current price (diff: ${priceDifference.toFixed(1)}%). Clearing historical data to prevent incorrect display.`);
+        // Clear historical data if it doesn't match - this prevents showing wrong market's data
+        // The chart will show only current price until correct historical data loads
+        sorted.length = 0;
+      }
+    }
+    
     // Add current price if recent
     const now = Date.now();
-    const priceToUse = displayMarketPrice || currentPrice;
     if (priceToUse && sorted.length > 0) {
       const lastPoint = sorted[sorted.length - 1];
       const timeSinceLastPoint = now - lastPoint.timestamp;
