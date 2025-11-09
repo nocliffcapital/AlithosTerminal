@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get API key from environment variable or use provided key
-    const apiKey = process.env.NEWSAPI_AI_API_KEY || 'cdc014c0-95e8-4344-9a2e-82d477505f92';
+    // Get API key from environment variable
+    const apiKey = process.env.NEWSAPI_AI_API_KEY;
     if (!apiKey) {
       console.warn('[NewsAPI.ai] No API key found in environment. API calls will likely fail.');
       return NextResponse.json(
