@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { createChart, IChartApi, ISeriesApi, AreaSeriesPartialOptions, HistogramSeriesPartialOptions, Time } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, AreaSeriesPartialOptions, HistogramSeriesPartialOptions, Time, ColorType } from 'lightweight-charts';
 import { chartTheme, chartColors } from '@/lib/charts/utils';
 
 interface DepthDataPoint {
@@ -39,7 +39,7 @@ export function LightweightDepthChart({
       autoSize: true,
       layout: {
         ...chartTheme.layout,
-        background: { type: 'solid' as const, color: '#0A0A0A' },
+        background: { type: ColorType.Solid, color: '#0A0A0A' },
       },
       rightPriceScale: {
         ...chartTheme.rightPriceScale,
@@ -94,7 +94,7 @@ export function LightweightDepthChart({
 
     // Create bid series (green)
     if (!bidSeriesRef.current) {
-      bidSeriesRef.current = chartRef.current.addHistogramSeries({
+      bidSeriesRef.current = (chartRef.current as any).addHistogramSeries({
         color: chartColors.depthBid,
         priceFormat: {
           type: 'volume',
@@ -109,7 +109,7 @@ export function LightweightDepthChart({
 
     // Create ask series (red)
     if (!askSeriesRef.current) {
-      askSeriesRef.current = chartRef.current.addHistogramSeries({
+      askSeriesRef.current = (chartRef.current as any).addHistogramSeries({
         color: chartColors.depthAsk,
         priceFormat: {
           type: 'volume',

@@ -87,7 +87,11 @@ export function TransactionStatusTracker({ transactionHash, onComplete, onError 
     enabled: !!transactionHash && status !== 'success' && status !== 'error',
     refetchInterval: (data) => {
       // Stop polling if transaction is confirmed
-      if (data?.receipt) {
+      if (data && typeof data === 'object' && 'receipt' in data && data.receipt) {
+        return false;
+      }
+      // Also stop if data is a TransactionReceipt (successful transaction)
+      if (data && typeof data === 'object' && 'status' in data && data.status === 'success') {
         return false;
       }
       return 2000; // Poll every 2 seconds

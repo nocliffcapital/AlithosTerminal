@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Address } from 'viem';
 import { MarketSelector } from '@/components/MarketSelector';
-import { calculateLiquidityMetrics, calculateCommonImpactSizes } from '@/lib/utils/liquidity-metrics';
+import { calculateLiquidityMetrics, calculateCommonImpactSizes, LiquidityMetrics } from '@/lib/utils/liquidity-metrics';
 import { useMemo } from 'react';
 
 function DepthCardComponent() {
@@ -51,8 +51,19 @@ function DepthCardComponent() {
   );
 
   // Calculate liquidity metrics (before early returns to avoid conditional hooks)
-  const metrics = useMemo(() => {
-    if (!orderBook) return { midPrice: 0, spread: 0, totalLiquidity: 0 };
+  const metrics = useMemo((): LiquidityMetrics => {
+    if (!orderBook) {
+      return {
+        depth: 0,
+        spread: 0,
+        spreadAbs: 0,
+        midPrice: 0,
+        bestBid: null,
+        bestAsk: null,
+        bidDepth: 0,
+        askDepth: 0,
+      };
+    }
     return calculateLiquidityMetrics(orderBook.bids, orderBook.asks);
   }, [orderBook?.bids, orderBook?.asks]);
 

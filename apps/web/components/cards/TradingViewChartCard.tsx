@@ -18,7 +18,7 @@ function TradingViewChartCardComponent({
   // Use prop marketId only - don't fall back to global state to avoid shared state issues
   const effectiveMarketId = propMarketId;
   
-  const { data: market } = useMarket(effectiveMarketId);
+  const { data: market } = useMarket(effectiveMarketId ?? null);
   
   const widgetContainerRef = useRef<HTMLDivElement>(null);
   const widgetRef = useRef<any>(null);

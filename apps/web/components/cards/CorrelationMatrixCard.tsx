@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useMarketStore } from '@/stores/market-store';
 import { useMarkets, useHistoricalPrices } from '@/lib/hooks/usePolymarketData';
 import { Button } from '@/components/ui/button';

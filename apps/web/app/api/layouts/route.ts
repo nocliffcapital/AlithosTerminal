@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
         where: { id: existingDefault.id },
         data: {
           name,
-          config,
+          config: config as Prisma.InputJsonValue,
           isDefault: true,
         },
       });
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
           workspaceId,
           userId: actualUserId,
           name,
-          config,
+          config: config as Prisma.InputJsonValue,
           isDefault: isDefault ?? false,
         },
       });

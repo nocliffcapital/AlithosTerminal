@@ -194,11 +194,6 @@ class PolymarketRealtimeAdapter {
           }
         });
       },
-      onError: (error) => {
-        console.error('[RealtimeClient] ❌ Connection error:', error);
-        this.isConnecting = false;
-        // Don't increment attempts here - onStatusChange will handle it
-      },
     };
 
     try {
@@ -467,8 +462,26 @@ class PolymarketRealtimeAdapter {
   }
 }
 
-// Singleton instance
-export const realtimeClient = new PolymarketRealtimeAdapter();
+// Singleton instance - lazy initialization
+let realtimeClientInstance: PolymarketRealtimeAdapter | null = null;
+
+function getRealtimeClient(): PolymarketRealtimeAdapter {
+  if (!realtimeClientInstance) {
+    realtimeClientInstance = new PolymarketRealtimeAdapter();
+  }
+  return realtimeClientInstance;
+}
+
+export const realtimeClient = new Proxy({} as PolymarketRealtimeAdapter, {
+  get(_target, prop) {
+    const instance = getRealtimeClient();
+    const value = (instance as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
+});
 
 export default realtimeClient;
 

@@ -431,6 +431,26 @@ class AlertSystem {
   }
 }
 
-export const alertSystem = new AlertSystem();
+// Singleton instance - lazy initialization
+let alertSystemInstance: AlertSystem | null = null;
+
+function getAlertSystem(): AlertSystem {
+  if (!alertSystemInstance) {
+    alertSystemInstance = new AlertSystem();
+  }
+  return alertSystemInstance;
+}
+
+export const alertSystem = new Proxy({} as AlertSystem, {
+  get(_target, prop) {
+    const instance = getAlertSystem();
+    const value = (instance as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
+});
+
 export default alertSystem;
 

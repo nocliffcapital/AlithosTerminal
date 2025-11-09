@@ -230,7 +230,7 @@ function TeamManagementCardComponent() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  {(['MEMBER', 'VIEWER'] as const).includes(member.role) && (
+                  {(['MEMBER', 'VIEWER'] as const).includes(member.role as 'MEMBER' | 'VIEWER') && (
                     <Button
                       variant="ghost"
                       size="sm"

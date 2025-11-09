@@ -69,10 +69,9 @@ export const chartColors = {
  * Line series styling options
  */
 export const lineSeriesOptions: Partial<LineStyleOptions> = {
-  lineWidth: 2.5,
+  lineWidth: 2,
   color: chartColors.yes,
-  priceLineVisible: false,
-  lastValueVisible: false,
+  lineVisible: true,
   crosshairMarkerVisible: true,
   crosshairMarkerRadius: 4,
 };

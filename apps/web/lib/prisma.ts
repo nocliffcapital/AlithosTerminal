@@ -74,10 +74,33 @@ function getPrismaClientInstance(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
-// Export prisma - initialize on first access
-export const prisma = getPrismaClientInstance();
+// Export prisma - initialize lazily on first access
+// Use a getter function to ensure truly lazy initialization (only when actually accessed)
+let prismaInstance: PrismaClient | null = null;
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+function getPrisma(): PrismaClient {
+  if (!prismaInstance) {
+    prismaInstance = getPrismaClientInstance();
+    // Store in global for hot reload support
+    if (process.env.NODE_ENV !== 'production') {
+      globalForPrisma.prisma = prismaInstance;
+    }
+  }
+  return prismaInstance;
+}
+
+// Export prisma as a Proxy to maintain the same API while ensuring lazy initialization
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const instance = getPrisma();
+    const value = (instance as any)[prop];
+    // If it's a function, bind it to the instance
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
+});
 
 // Export getPrismaClient for backward compatibility
 export function getPrismaClient() {

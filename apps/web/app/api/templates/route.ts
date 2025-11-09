@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 // Helper to ensure DATABASE_URL is loaded
 function ensureDatabaseUrl() {
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
         userId,
         name,
         description: description || null,
-        config,
+        config: config as Prisma.InputJsonValue,
         isPublic: isPublic ?? false,
       },
     });

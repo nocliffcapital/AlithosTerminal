@@ -1,4 +1,5 @@
-import { type ClassValue, cn } from './utils';
+import { cn } from '../utils';
+import { type ClassValue } from 'clsx';
 
 /**
  * Spacing utilities for consistent spacing across cards

@@ -382,7 +382,7 @@ export default function Home() {
         ) : (
           <>
             {/* Header */}
-            <header className="border-b border-border bg-background/95 backdrop-blur-sm px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky top-0 z-30">
+            <header className="border-b border-border bg-background/95 backdrop-blur-sm px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between sticky z-30" style={{ top: 'calc(var(--network-banner-height, 0px) + var(--risk-banner-height, 0px))' }}>
           <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               <img 
@@ -559,6 +559,7 @@ export default function Home() {
         onOpenChange={setPresetsDialogOpen}
         buyPreset={presets.buyPreset}
         sellPreset={presets.sellPreset}
+        slippagePreset={presets.slippagePreset}
         onSave={savePresets}
       />
     </main>

@@ -2857,7 +2857,25 @@ class PolymarketClient {
   }
 }
 
-// Singleton instance
-export const polymarketClient = new PolymarketClient();
+// Singleton instance - lazy initialization
+let polymarketClientInstance: PolymarketClient | null = null;
+
+function getPolymarketClient(): PolymarketClient {
+  if (!polymarketClientInstance) {
+    polymarketClientInstance = new PolymarketClient();
+  }
+  return polymarketClientInstance;
+}
+
+export const polymarketClient = new Proxy({} as PolymarketClient, {
+  get(_target, prop) {
+    const instance = getPolymarketClient();
+    const value = (instance as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
+});
 
 export default polymarketClient;

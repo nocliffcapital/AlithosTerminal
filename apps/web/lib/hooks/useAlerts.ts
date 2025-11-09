@@ -94,6 +94,7 @@ export function useCreateAlert() {
       conditions: AlertCondition[];
       actions: AlertAction[];
       isActive?: boolean;
+      cooldownPeriodMinutes?: number;
     }) => {
       if (!userId || !isAuthenticated) {
         throw new Error('User not authenticated');

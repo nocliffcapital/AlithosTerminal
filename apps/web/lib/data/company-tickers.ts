@@ -249,7 +249,6 @@ const SP500_COMPANIES: Record<string, string> = {
   'fox corporation': 'FOX',
   'disney': 'DIS',
   'walt disney': 'DIS',
-  'netflix': 'NFLX',
   
   // Utilities
   'next era energy': 'NEE',
@@ -314,7 +313,6 @@ const DOW_JONES_COMPANIES: Record<string, string> = {
   'chevron': 'CVX',
   'merck': 'MRK',
   'travelers': 'TRV',
-  'disney': 'DIS',
   'jpmorgan chase': 'JPM',
   '3m': 'MMM',
   'intel': 'INTC',
@@ -385,8 +383,6 @@ const NASDAQ_100_COMPANIES: Record<string, string> = {
   'booking holdings': 'BKNG',
   'expedia': 'EXPE',
   'tripadvisor': 'TRIP',
-  'netflix': 'NFLX',
-  'disney': 'DIS',
   'walt disney': 'DIS',
   'comcast': 'CMCSA',
   'charter communications': 'CHTR',
@@ -401,7 +397,6 @@ const NASDAQ_100_COMPANIES: Record<string, string> = {
   'chipotle': 'CMG',
   'dominos pizza': 'DPZ',
   'yum brands': 'YUM',
-  'tesla': 'TSLA',
   'rivian': 'RIVN',
   'lucid': 'LCID',
   'nio': 'NIO',
@@ -416,7 +411,6 @@ const EURO_STOXX_50_COMPANIES: Record<string, string> = {
   'asml': 'ASML.AS',
   'asml holding': 'ASML.AS',
   'sap': 'SAP.DE',
-  'lvmh': 'MC.PA',
   'louis vuitton': 'MC.PA',
   'lvmh moet hennessy': 'MC.PA',
   'totalenergies': 'TTE.PA',
@@ -464,7 +458,6 @@ const EURO_STOXX_50_COMPANIES: Record<string, string> = {
   'heineken': 'HEIA.AS',
   'carlsberg': 'CARL.B.CO',
   'diageo': 'DGE.L',
-  'lvmh': 'MC.PA',
   'kering': 'KER.PA',
   'hermes': 'RMS.PA',
   'burberry': 'BRBY.L',
@@ -612,7 +605,6 @@ const NIKKEI_225_COMPANIES: Record<string, string> = {
   'kansai electric': '9503.T',
   'chubu electric': '9502.T',
   'kyushu electric': '9508.T',
-  'takeda': '4502.T',
 };
 
 // DAX (Germany) companies
@@ -663,7 +655,6 @@ const DAX_COMPANIES: Record<string, string> = {
 const CAC_40_COMPANIES: Record<string, string> = {
   'totalenergies': 'TTE.PA',
   'total': 'TTE.PA',
-  'lvmh': 'MC.PA',
   'louis vuitton': 'MC.PA',
   'sanofi': 'SAN.PA',
   'loreal': 'OR.PA',

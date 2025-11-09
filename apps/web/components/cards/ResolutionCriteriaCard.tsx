@@ -16,7 +16,7 @@ function ResolutionCriteriaCardComponent({ marketId: propMarketId, onMarketChang
   // Use prop marketId only - don't fall back to global state to avoid shared state issues
   const effectiveMarketId = propMarketId;
   const [showMarketSelector, setShowMarketSelector] = useState(false);
-  const { data: market, isLoading } = useMarket(effectiveMarketId);
+  const { data: market, isLoading } = useMarket(effectiveMarketId ?? null);
 
   // Parse resolution source and criteria (move before early returns)
   const endDate = market?.endDate ? new Date(market.endDate) : null;

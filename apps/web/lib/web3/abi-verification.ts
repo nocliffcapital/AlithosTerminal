@@ -52,8 +52,9 @@ export async function verifyABI(
             address: contractAddress,
             abi: abi,
             functionName: functionName as any,
+            args: [] as any,
             // We can't actually call without args, but we can check if the function is in the ABI
-          });
+          } as any);
           return { name: functionName, exists: true };
         } catch (error: any) {
           // If error is about missing function, it doesn't exist
@@ -98,7 +99,7 @@ export async function verifyABI(
  * Verify the FPMM contract ABI
  */
 export async function verifyFPMMABI(): Promise<ABIValidationResult> {
-  return verifyABI(FPMM_ADDRESS, fpmmABI);
+  return verifyABI(FPMM_ADDRESS, fpmmABI as unknown as any[]);
 }
 
 /**

@@ -448,6 +448,7 @@ export function useClobAuth() {
 
   return {
     ...authState,
+    authenticated,
     requestAuth,
     getAuthParams,
     isReady: authenticated && !!(user?.wallet?.address || (user?.linkedAccounts?.some((acc: any) => acc.type === 'wallet' && 'address' in acc && acc.address))),

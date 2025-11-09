@@ -50,7 +50,7 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
   // Use prop marketId only - don't fall back to global state to avoid shared state issues
   const effectiveMarketId = propMarketId;
   const [showMarketSelector, setShowMarketSelector] = useState(false);
-  const { data: market, isLoading: marketLoading } = useMarket(effectiveMarketId);
+  const { data: market, isLoading: marketLoading } = useMarket(effectiveMarketId ?? null);
   const { setMarketQuestion } = React.useContext(CardMarketContext);
   const [researchResult, setResearchResult] = useState<MarketResearchResult | null>(null);
   const [isResearching, setIsResearching] = useState(false);

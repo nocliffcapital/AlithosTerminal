@@ -429,6 +429,7 @@ function QuickTicketCardComponent() {
         onOpenChange={handleClosePresetsDialog}
         buyPreset={presets.buyPreset}
         sellPreset={presets.sellPreset}
+        slippagePreset={presets.slippagePreset}
         onSave={savePresets}
       />
 

@@ -4,7 +4,8 @@
  */
 
 import { Agent, run, setDefaultOpenAIKey } from '@openai/agents';
-import { GradedSource, AnalysisResult, AgentAnalysis, Market, ValyuResult, ResearchStrategy } from './types';
+import { GradedSource, AnalysisResult, AgentAnalysis, ValyuResult, ResearchStrategy } from './types';
+import { Market } from '@/lib/api/polymarket';
 
 /**
  * Event context for multi-option events

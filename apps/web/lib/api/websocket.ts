@@ -353,9 +353,27 @@ class PolymarketWebSocket {
   }
 }
 
-// Singleton instance
+// Singleton instance - lazy initialization
 // CLOB WebSocket URL: wss://ws-subscriptions-clob.polymarket.com/ws/
-const WS_URL = process.env.NEXT_PUBLIC_POLYMARKET_CLOB_WS_URL || 'wss://ws-subscriptions-clob.polymarket.com/ws/';
-export const polymarketWS = new PolymarketWebSocket(WS_URL);
+let polymarketWSInstance: PolymarketWebSocket | null = null;
+
+function getPolymarketWS(): PolymarketWebSocket {
+  if (!polymarketWSInstance) {
+    const WS_URL = process.env.NEXT_PUBLIC_POLYMARKET_CLOB_WS_URL || 'wss://ws-subscriptions-clob.polymarket.com/ws/';
+    polymarketWSInstance = new PolymarketWebSocket(WS_URL);
+  }
+  return polymarketWSInstance;
+}
+
+export const polymarketWS = new Proxy({} as PolymarketWebSocket, {
+  get(_target, prop) {
+    const instance = getPolymarketWS();
+    const value = (instance as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(instance);
+    }
+    return value;
+  },
+});
 
 export default polymarketWS;

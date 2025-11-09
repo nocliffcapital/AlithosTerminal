@@ -26,8 +26,8 @@ function MarketInfoCardComponent({ marketId: propMarketId, onMarketChange }: Mar
   // Use prop marketId only - don't fall back to global state to avoid shared state issues
   const effectiveMarketId = propMarketId;
   const [showMarketSelector, setShowMarketSelector] = useState(false);
-  const { data: price, isLoading } = useMarketPrice(effectiveMarketId);
-  const { data: fetchedMarket } = useMarket(effectiveMarketId);
+  const { data: price, isLoading } = useMarketPrice(effectiveMarketId ?? null);
+  const { data: fetchedMarket } = useMarket(effectiveMarketId ?? null);
   const { setMarketQuestion } = React.useContext(CardMarketContext);
   
   // Subscribe to real-time price updates for instant updates

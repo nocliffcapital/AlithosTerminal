@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, X, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ export function RiskWarning({
   onDismiss 
 }: RiskWarningProps) {
   const [dismissed, setDismissed] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
 
   // Check localStorage on mount
   useEffect(() => {
@@ -34,6 +35,16 @@ export function RiskWarning({
       }
     }
   }, [dismissible]);
+
+  // Update CSS variable with banner height (only for banner variant)
+  useEffect(() => {
+    if (variant === 'banner' && bannerRef.current && !dismissed) {
+      const height = bannerRef.current.offsetHeight;
+      document.documentElement.style.setProperty('--risk-banner-height', `${height}px`);
+    } else if (variant === 'banner') {
+      document.documentElement.style.setProperty('--risk-banner-height', '0px');
+    }
+  }, [variant, dismissed]);
 
   const handleDismiss = () => {
     setDismissed(true);
@@ -112,22 +123,33 @@ export function RiskWarning({
   }
 
   // Banner variant (default)
+  // Position below NetworkValidationBanner if it exists
   return (
-    <div className={cn('p-2 bg-red-500/10 border-b border-red-500/20', className)}>
-      <div className="flex items-center gap-2 max-w-7xl mx-auto">
-        <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0" />
-        <div className="flex-1 text-xs text-muted-foreground">
-          <strong className="text-red-400">Risk Warning:</strong> Trading involves substantial risk of loss. 
-          Only trade with funds you can afford to lose. Smart contracts may have bugs or be exploited.
+    <div 
+      ref={bannerRef}
+      className={cn('fixed left-0 right-0 z-40 bg-gradient-to-r from-red-500/10 via-red-500/8 to-red-500/10 border-b border-red-500/20 backdrop-blur-sm', className)} 
+      style={{ top: 'var(--network-banner-height, 0px)' }}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5">
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center">
+            <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
+          </div>
+          <div className="flex-1 text-xs text-red-200/90 leading-relaxed">
+            <span className="font-semibold text-red-300">Risk Warning:</span> Trading involves substantial risk of loss. 
+            Only trade with funds you can afford to lose. Smart contracts may have bugs or be exploited.
+          </div>
+          {dismissible && (
+            <button
+              onClick={handleDismiss}
+              className="p-1.5 hover:bg-red-500/20 rounded-md transition-colors group flex-shrink-0"
+              title="Dismiss warning"
+              aria-label="Dismiss warning"
+            >
+              <X className="h-3.5 w-3.5 text-red-300 group-hover:text-red-200" />
+            </button>
+          )}
         </div>
-        {dismissible && (
-          <button
-            onClick={handleDismiss}
-            className="p-1 hover:bg-red-500/20 rounded transition-colors"
-          >
-            <X className="h-3 w-3 text-red-400" />
-          </button>
-        )}
       </div>
     </div>
   );

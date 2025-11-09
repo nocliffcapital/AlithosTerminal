@@ -99,7 +99,7 @@ export function Footer() {
           src="https://turquoise-keen-koi-739.mypinata.cloud/ipfs/bafkreicizxxhlc64ifefhkv52bjbjjwgeuyt6qvrqlpg6f3gzofeayah6q"
           alt="Alithos Terminal"
           className="h-4 sm:h-5 w-auto select-none"
-          style={{ objectFit: 'contain', userSelect: 'none', WebkitUserSelect: 'none', WebkitUserDrag: 'none', userDrag: 'none', pointerEvents: 'auto' }}
+          style={{ objectFit: 'contain', userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'auto' } as React.CSSProperties & { WebkitUserDrag?: string; userDrag?: string }}
           draggable="false"
           onContextMenu={(e) => e.preventDefault()}
           onDragStart={(e) => e.preventDefault()}

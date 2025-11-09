@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 
 const DEFAULT_BUY_PRESET = 10;
 const DEFAULT_SELL_PRESET = 25;
+const DEFAULT_SLIPPAGE_PRESET = 1.0;
 
 const PRESETS_STORAGE_KEY = 'trading-presets';
 const PRESETS_CHANGE_EVENT = 'presets-changed';
@@ -12,6 +13,7 @@ const PRESETS_CHANGE_EVENT = 'presets-changed';
 interface Presets {
   buyPreset: number;
   sellPreset: number;
+  slippagePreset: number;
 }
 
 // Helper function to load presets from localStorage
@@ -26,12 +28,14 @@ const loadPresetsFromStorage = (): Presets => {
         return {
           buyPreset: parsed.buyPresets[0] || DEFAULT_BUY_PRESET,
           sellPreset: parsed.sellPresets[0] || DEFAULT_SELL_PRESET,
+          slippagePreset: parsed.slippagePreset || DEFAULT_SLIPPAGE_PRESET,
         };
       }
       // New format
       return {
         buyPreset: parsed.buyPreset || DEFAULT_BUY_PRESET,
         sellPreset: parsed.sellPreset || DEFAULT_SELL_PRESET,
+        slippagePreset: parsed.slippagePreset || DEFAULT_SLIPPAGE_PRESET,
       };
     }
   } catch (error) {
@@ -40,6 +44,7 @@ const loadPresetsFromStorage = (): Presets => {
   return {
     buyPreset: DEFAULT_BUY_PRESET,
     sellPreset: DEFAULT_SELL_PRESET,
+    slippagePreset: DEFAULT_SLIPPAGE_PRESET,
   };
 };
 
@@ -48,6 +53,7 @@ export function usePresets() {
   const [presets, setPresets] = useState<Presets>({
     buyPreset: DEFAULT_BUY_PRESET,
     sellPreset: DEFAULT_SELL_PRESET,
+    slippagePreset: DEFAULT_SLIPPAGE_PRESET,
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -86,8 +92,8 @@ export function usePresets() {
     };
   }, []);
 
-  const savePresets = (buyPreset: number, sellPreset: number) => {
-    const newPresets = { buyPreset, sellPreset };
+  const savePresets = (buyPreset: number, sellPreset: number, slippagePreset: number) => {
+    const newPresets = { buyPreset, sellPreset, slippagePreset };
     console.log('[usePresets] Saving presets to localStorage:', newPresets);
     
     // Update state immediately
@@ -108,6 +114,7 @@ export function usePresets() {
         console.log('[usePresets] Parsed from localStorage:', parsed);
         console.log('[usePresets] Buy preset matches:', parsed.buyPreset === buyPreset);
         console.log('[usePresets] Sell preset matches:', parsed.sellPreset === sellPreset);
+        console.log('[usePresets] Slippage preset matches:', parsed.slippagePreset === slippagePreset);
       }
       
       // Dispatch custom event to notify other components

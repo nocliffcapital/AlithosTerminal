@@ -155,7 +155,7 @@ export function WorkspaceTabs() {
       console.error('[WorkspaceTabs] Failed to select workspace:', error);
       // Still update the current workspace ID even if layout load fails
       // This ensures the tab appears selected
-      layoutStore.setState({ currentWorkspaceId: workspaceId });
+      setCurrentWorkspace(workspaceId);
     }
   };
 

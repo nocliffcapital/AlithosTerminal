@@ -2,7 +2,7 @@
 
 import { PrivyProvider } from '@privy-io/react-auth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ToastContainer } from '@/components/Toast';
 import { useRealtimeConnection } from '@/lib/hooks/useRealtimeConnection';
@@ -10,6 +10,84 @@ import { useRealtimeConnection } from '@/lib/hooks/useRealtimeConnection';
 function RealtimeConnectionProvider({ children }: { children: React.ReactNode }) {
   // Initialize real-time connection globally
   useRealtimeConnection();
+  
+  // Suppress MetaMask provider conflict errors (harmless when multiple wallet extensions are installed)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    
+    // Suppress MetaMask provider conflict errors
+    const errorHandler = (...args: any[]) => {
+      try {
+        // Check if this is a MetaMask provider conflict error
+        const firstArg = args[0];
+        let message = '';
+        
+        if (typeof firstArg === 'string') {
+          message = firstArg;
+        } else if (firstArg instanceof Error) {
+          message = firstArg.message;
+        } else if (firstArg?.toString) {
+          message = firstArg.toString();
+        }
+        
+        // Only suppress specific MetaMask errors
+        if (
+          message.includes('MetaMask encountered an error setting the global Ethereum provider') ||
+          (message.includes('Cannot set property ethereum') && message.includes('which has only a getter'))
+        ) {
+          // Suppress this specific error - it's harmless when multiple wallet extensions are installed
+          return;
+        }
+        
+        // Always log other errors
+        originalError.apply(console, args);
+      } catch (e) {
+        // If error handler fails, fall back to original
+        originalError.apply(console, args);
+      }
+    };
+    
+    // Suppress runtime.lastError warnings from extensions
+    const warnHandler = (...args: any[]) => {
+      try {
+        const firstArg = args[0];
+        let message = '';
+        
+        if (typeof firstArg === 'string') {
+          message = firstArg;
+        } else if (firstArg?.toString) {
+          message = firstArg.toString();
+        }
+        
+        // Only suppress specific extension communication errors
+        if (
+          message.includes('runtime.lastError') ||
+          message.includes('Receiving end does not exist')
+        ) {
+          // Suppress extension communication errors - they're harmless
+          return;
+        }
+        
+        // Always log other warnings
+        originalWarn.apply(console, args);
+      } catch (e) {
+        // If warn handler fails, fall back to original
+        originalWarn.apply(console, args);
+      }
+    };
+    
+    console.error = errorHandler;
+    console.warn = warnHandler;
+    
+    return () => {
+      console.error = originalError;
+      console.warn = originalWarn;
+    };
+  }, []);
+  
   return <>{children}</>;
 }
 

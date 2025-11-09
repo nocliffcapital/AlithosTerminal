@@ -19,7 +19,7 @@ export function planResearchStrategy(market: Market): ResearchStrategy {
   const keyInformationNeeded = identifyKeyInformation(marketQuestion, market.category, daysUntilEnd);
 
   // Generate search queries
-  const searchQueries = generateSearchQueries(marketQuestion, market.category, keyInformationNeeded);
+  const searchQueries = generateSearchQueries(marketQuestion, keyInformationNeeded, market.category);
 
   // Identify important factors
   const importantFactors = identifyImportantFactors(marketQuestion, market.category);
@@ -309,7 +309,7 @@ function identifyKeyInformation(question: string, category?: string, daysUntilEn
 /**
  * Generate search queries based on market question
  */
-function generateSearchQueries(question: string, category?: string, keyInformation: string[]): string[] {
+function generateSearchQueries(question: string, keyInformation: string[], category?: string): string[] {
   const queries: string[] = [];
   const questionWords = question.split(/\s+/).filter(w => w.length > 3); // Filter out short words
   const currentYear = new Date().getFullYear();

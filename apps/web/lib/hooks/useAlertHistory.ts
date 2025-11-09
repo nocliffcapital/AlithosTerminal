@@ -9,6 +9,8 @@ export interface AlertHistoryEntry {
   alertName: string;
   triggeredAt: string;
   createdAt: string;
+  marketId?: string;
+  conditionsSnapshot?: any[];
 }
 
 export interface AlertHistoryParams {

@@ -113,10 +113,10 @@ export function WithdrawModal({ open, onOpenChange, currentBalance }: WithdrawMo
       // Transfer USDC
       const hash = await walletClient.writeContract({
         address: USDC_ADDRESS,
-        abi: erc20ABI,
-        functionName: 'transfer',
+        abi: erc20ABI as any,
+        functionName: 'transfer' as any,
         args: [recipient as Address, amountWei],
-      });
+      } as any);
 
       // Wait for transaction confirmation
       await publicClient.waitForTransactionReceipt({ hash });

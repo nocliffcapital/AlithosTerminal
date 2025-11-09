@@ -11,13 +11,15 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { validateSlippageTolerance, formatSlippage } from '@/lib/web3/slippage-utils';
 
 interface PresetsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   buyPreset: number;
   sellPreset: number;
-  onSave: (buyPreset: number, sellPreset: number) => void;
+  slippagePreset: number;
+  onSave: (buyPreset: number, sellPreset: number, slippagePreset: number) => void;
 }
 
 export function PresetsDialog({ 
@@ -25,34 +27,42 @@ export function PresetsDialog({
   onOpenChange, 
   buyPreset: initialBuyPreset, 
   sellPreset: initialSellPreset,
+  slippagePreset: initialSlippagePreset,
   onSave 
 }: PresetsDialogProps) {
   const [buyPreset, setBuyPreset] = useState<number>(initialBuyPreset);
   const [sellPreset, setSellPreset] = useState<number>(initialSellPreset);
+  const [slippagePreset, setSlippagePreset] = useState<number>(initialSlippagePreset);
   const [editingBuy, setEditingBuy] = useState<boolean>(false);
   const [editingSell, setEditingSell] = useState<boolean>(false);
+  const [editingSlippage, setEditingSlippage] = useState<boolean>(false);
   const [editBuyValue, setEditBuyValue] = useState<string>('');
   const [editSellValue, setEditSellValue] = useState<string>('');
+  const [editSlippageValue, setEditSlippageValue] = useState<string>('');
 
   // Update local state when dialog opens
   useEffect(() => {
     if (open) {
-      console.log('[PresetsDialog] Dialog opened, loading initial presets:', { initialBuyPreset, initialSellPreset });
+      console.log('[PresetsDialog] Dialog opened, loading initial presets:', { initialBuyPreset, initialSellPreset, initialSlippagePreset });
       setBuyPreset(initialBuyPreset);
       setSellPreset(initialSellPreset);
+      setSlippagePreset(initialSlippagePreset);
       setEditingBuy(false);
       setEditingSell(false);
+      setEditingSlippage(false);
       setEditBuyValue('');
       setEditSellValue('');
+      setEditSlippageValue('');
     }
-  }, [open, initialBuyPreset, initialSellPreset]);
+  }, [open, initialBuyPreset, initialSellPreset, initialSlippagePreset]);
 
   const handleSave = () => {
     console.log('[PresetsDialog] handleSave called');
     console.log('[PresetsDialog] Current buyPreset:', buyPreset);
     console.log('[PresetsDialog] Current sellPreset:', sellPreset);
-    console.log('[PresetsDialog] Calling onSave with:', { buyPreset, sellPreset });
-    onSave(buyPreset, sellPreset);
+    console.log('[PresetsDialog] Current slippagePreset:', slippagePreset);
+    console.log('[PresetsDialog] Calling onSave with:', { buyPreset, sellPreset, slippagePreset });
+    onSave(buyPreset, sellPreset, slippagePreset);
     console.log('[PresetsDialog] onSave called, closing dialog');
     onOpenChange(false);
   };
@@ -104,13 +114,36 @@ export function PresetsDialog({
     setEditSellValue('');
   };
 
+  const startEditSlippage = () => {
+    setEditingSlippage(true);
+    setEditSlippageValue(slippagePreset.toString());
+  };
+
+  const saveSlippageEdit = () => {
+    const value = parseFloat(editSlippageValue);
+    if (!isNaN(value) && validateSlippageTolerance(value)) {
+      console.log('[PresetsDialog] Updating slippage preset from', slippagePreset, 'to', value);
+      setSlippagePreset(value);
+      console.log('[PresetsDialog] Slippage preset updated to:', value);
+    } else {
+      console.warn('[PresetsDialog] Invalid value for slippage preset:', { value, editSlippageValue });
+    }
+    setEditingSlippage(false);
+    setEditSlippageValue('');
+  };
+
+  const cancelSlippageEdit = () => {
+    setEditingSlippage(false);
+    setEditSlippageValue('');
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Presets</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Set your quick buy and sell preset amounts.
+            Set your quick buy, sell, and slippage preset values.
           </DialogDescription>
         </DialogHeader>
 
@@ -220,6 +253,65 @@ export function PresetsDialog({
                     size="sm"
                     variant="outline"
                     onClick={startEditSell}
+                    className="h-10"
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Slippage Preset */}
+          <div className="space-y-3">
+            <Label className="text-sm font-bold text-foreground">Slippage Preset (%)</Label>
+            {editingSlippage ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={editSlippageValue}
+                  onChange={(e) => setEditSlippageValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      saveSlippageEdit();
+                    } else if (e.key === 'Escape') {
+                      cancelSlippageEdit();
+                    }
+                  }}
+                  className="h-10 text-sm font-mono"
+                  autoFocus
+                  placeholder="Enter slippage %"
+                  min="0.1"
+                  max="10"
+                  step="0.1"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={saveSlippageEdit}
+                  className="h-10"
+                >
+                  ✓
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={cancelSlippageEdit}
+                  className="h-10"
+                >
+                  ✕
+                </Button>
+              </div>
+            ) : (
+              <div className="relative group">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 px-4 py-2 border border-blue-600/50 rounded-md bg-blue-600/10 text-blue-400 font-semibold">
+                    {formatSlippage(slippagePreset)}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={startEditSlippage}
                     className="h-10"
                   >
                     Edit

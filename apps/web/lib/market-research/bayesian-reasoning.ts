@@ -2,7 +2,8 @@
  * Bayesian reasoning to merge findings into confidence-weighted outcome
  */
 
-import { GradedSource, AnalysisResult, BayesianResult, BayesianProbabilities, Market } from './types';
+import { GradedSource, AnalysisResult, BayesianResult, BayesianProbabilities } from './types';
+import { Market } from '@/lib/api/polymarket';
 
 /**
  * Apply Bayesian reasoning to merge all findings

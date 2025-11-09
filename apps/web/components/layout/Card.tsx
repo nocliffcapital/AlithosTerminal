@@ -194,9 +194,9 @@ function CardHeader({
     if (sourceCardId && sourceTabId && cardType === card.type && sourceCardId !== card.id) {
       const targetTabIndex = tabs.findIndex(tab => tab.id === targetTabId);
       if (targetTabIndex >= 0) {
-        moveTab(sourceCardId, sourceTabId, card.id, targetTabIndex);
+        (moveTab as any)(sourceCardId, sourceTabId, card.id, targetTabIndex);
       } else {
-        moveTab(sourceCardId, sourceTabId, card.id);
+        (moveTab as any)(sourceCardId, sourceTabId, card.id);
       }
     }
   }, [card.type, card.id, tabs, moveTab]);
@@ -357,7 +357,7 @@ export const Card = React.memo(function Card({ card }: CardProps) {
   const addTab = useLayoutStore((state) => state.addTab);
   const removeTab = useLayoutStore((state) => state.removeTab);
   const switchTab = useLayoutStore((state) => state.switchTab);
-  const moveTab = useLayoutStore((state) => state.moveTab) as (sourceCardId: string, sourceTabId: string, targetCardId: string, targetIndex?: number) => void;
+  const moveTab = useLayoutStore((state) => state.moveTab);
   const getCardLinkGroup = useLayoutStore((state) => state.getCardLinkGroup);
   const linkSelectionMode = useLayoutStore((state) => state.linkSelectionMode);
   const selectedCardIdsForLinking = useLayoutStore((state) => state.selectedCardIdsForLinking);
@@ -384,9 +384,9 @@ export const Card = React.memo(function Card({ card }: CardProps) {
     card.activeTabId, 
     card.props,
     // Include marketIds array length and first element to detect changes
-    card.props?.marketIds?.length,
-    card.props?.marketIds?.[0],
-    card.props?.marketId,
+    (card.props as any)?.marketIds?.length,
+    (card.props as any)?.marketIds?.[0],
+    (card.props as any)?.marketId,
   ]);
   
   // Get tab label function - we'll create a component that fetches market data
