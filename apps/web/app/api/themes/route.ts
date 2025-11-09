@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 const createThemeSchema = z.object({
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       data: {
         userId: user.id,
         name: validatedData.name,
-        config: validatedData.config,
+        config: validatedData.config as Prisma.InputJsonValue,
         isPublic: validatedData.isPublic,
       },
     });
