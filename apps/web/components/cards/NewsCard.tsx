@@ -46,14 +46,12 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
       }
     });
   }, [displayMarket, setMarketQuestion]);
-  
-  const marketQuery = displayMarket?.question || displayMarket?.slug || effectiveMarketId || null;
 
   const { data: newsData, isLoading: isLoadingNews, error } = useAdjacentNews({
-    market: marketQuery,
+    market: displayMarket || null,
     days,
     limit,
-    enabled: !!marketQuery,
+    enabled: !!displayMarket,
   });
 
   const isLoading = isLoadingMarket || isLoadingNews;
@@ -170,7 +168,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
                error.message.includes('403') ||
                error.message.includes('unauthorized'))) && (
               <div className="text-xs text-muted-foreground/70 mt-2 max-w-xs p-2 rounded border border-border/50">
-                Please configure ADJACENT_NEWS_API_KEY in your .env.local file
+                Please configure NEWSAPI_AI_API_KEY in your .env.local file
               </div>
             )}
             {error instanceof Error && error.message.includes('Market not found') && (

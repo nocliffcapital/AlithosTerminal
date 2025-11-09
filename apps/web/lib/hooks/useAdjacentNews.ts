@@ -1,6 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Market } from '@/lib/api/polymarket';
+import { extractNewsKeywords, keywordsToQuery } from '@/lib/utils/news-keywords';
 
 export interface NewsArticle {
   title: string;
@@ -26,7 +28,7 @@ export interface NewsResponse {
 }
 
 export interface UseAdjacentNewsParams {
-  market: string | null; // Market query (can be market question, topic, or keywords)
+  market: Market | null; // Market object (changed from string | null)
   days?: number; // Number of days to look back (1-30, default: 7)
   limit?: number; // Maximum number of results (1-50, default: 10)
   excludeDomains?: string; // Comma-separated list of domains to exclude
@@ -35,21 +37,31 @@ export interface UseAdjacentNewsParams {
 }
 
 /**
- * Hook to fetch news articles related to a market from Adjacent News API
- * Docs: https://docs.adj.news/api-news-market
+ * Hook to fetch news articles related to a market from NewsAPI.ai
+ * Extracts keywords from market data and queries NewsAPI.ai
+ * Docs: https://newsapi.ai/documentation
  */
 export function useAdjacentNews(params: UseAdjacentNewsParams) {
   const { market, days = 7, limit = 10, excludeDomains, includeDomains, enabled = true } = params;
 
+  // Extract keywords from market
+  const keywords = market ? extractNewsKeywords(market) : [];
+  const keywordsQuery = keywordsToQuery(keywords);
+
   return useQuery({
-    queryKey: ['adjacent-news', market, days, limit, excludeDomains, includeDomains],
+    queryKey: ['adjacent-news', market?.id, keywordsQuery, days, limit, excludeDomains, includeDomains],
     queryFn: async (): Promise<NewsResponse> => {
       if (!market) {
-        throw new Error('Market query is required');
+        throw new Error('Market is required');
+      }
+
+      if (keywords.length === 0) {
+        throw new Error('No keywords extracted from market');
       }
 
       // Build query parameters
       const queryParams = new URLSearchParams({
+        keywords: keywordsQuery,
         days: days.toString(),
         limit: limit.toString(),
       });
@@ -62,10 +74,12 @@ export function useAdjacentNews(params: UseAdjacentNewsParams) {
         queryParams.append('includeDomains', includeDomains);
       }
 
-      // Call our API route which proxies to Adjacent News API
-      const apiUrl = `/api/adjacent-news/news?market=${encodeURIComponent(market)}&${queryParams.toString()}`;
+      // Call our API route which proxies to NewsAPI.ai
+      const apiUrl = `/api/newsapi-ai?${queryParams.toString()}`;
       
-      console.log('[useAdjacentNews] Fetching news for market:', market);
+      console.log('[useAdjacentNews] Fetching news for market:', market.question);
+      console.log('[useAdjacentNews] Extracted keywords:', keywords);
+      console.log('[useAdjacentNews] Keywords query string:', keywordsQuery);
 
       const response = await fetch(apiUrl);
 
@@ -100,9 +114,14 @@ export function useAdjacentNews(params: UseAdjacentNewsParams) {
 
       console.log('[useAdjacentNews] ✅ Received', data.data?.length || 0, 'news articles');
       
+      // Log debug info if available (development only)
+      if (data.meta?.debug && process.env.NODE_ENV === 'development') {
+        console.log('[useAdjacentNews] Debug info:', data.meta.debug);
+      }
+      
       return data;
     },
-    enabled: enabled && !!market,
+    enabled: enabled && !!market && keywords.length > 0,
     staleTime: 5 * 60 * 1000, // 5 minutes - news doesn't change as frequently as prices
     retry: 2,
     refetchOnWindowFocus: false,

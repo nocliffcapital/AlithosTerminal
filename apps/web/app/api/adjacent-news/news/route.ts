@@ -1,11 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * API route to proxy Adjacent News API requests
- * This avoids CORS issues and keeps the API key secure on the server
- * Docs: https://docs.adj.news/api-news-market
+ * DEPRECATED: This API route has been replaced by NewsAPI.ai integration
+ * 
+ * This endpoint is disabled and kept for potential rollback purposes.
+ * The application now uses NewsAPI.ai via /api/newsapi-ai route.
+ * 
+ * Migration date: 2025-01-XX
+ * 
+ * Old implementation:
+ * - API route: /api/adjacent-news/news
+ * - API: Adjacent News API (https://docs.adj.news/api-news-market)
+ * 
+ * New implementation:
+ * - API route: /api/newsapi-ai
+ * - API: NewsAPI.ai (https://newsapi.ai/documentation)
+ * 
+ * To re-enable this endpoint, uncomment the code below and update the hook
+ * in apps/web/lib/hooks/useAdjacentNews.ts to use this endpoint again.
  */
 export async function GET(request: NextRequest) {
+  // DEPRECATED: Return error indicating migration to NewsAPI.ai
+  return NextResponse.json(
+    {
+      error: 'This endpoint has been deprecated',
+      details: 'The application has migrated to NewsAPI.ai. Please use /api/newsapi-ai instead.',
+      migration: {
+        oldEndpoint: '/api/adjacent-news/news',
+        newEndpoint: '/api/newsapi-ai',
+        date: '2025-01-XX',
+      },
+    },
+    { status: 410 } // 410 Gone - indicates resource is permanently unavailable
+  );
+
+  /* DISABLED CODE - Kept for potential rollback
   try {
     const searchParams = request.nextUrl.searchParams;
     const market = searchParams.get('market');
@@ -145,4 +174,5 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+  */
 }
