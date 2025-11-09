@@ -6,7 +6,7 @@ import { planResearchStrategy } from '@/lib/market-research/research-strategy';
 import { gradeSource } from '@/lib/market-research/source-grading';
 import { runMultiAgentAnalysis, runResearchAgent, EventContext } from '@/lib/market-research/multi-agent-analysis';
 import { applyBayesianReasoning } from '@/lib/market-research/bayesian-reasoning';
-import { FinalVerdict, MarketResearchResult, GradedSource, ValyuResult } from '@/lib/market-research/types';
+import { FinalVerdict, MarketResearchResult, MarketResearchResultJson, GradedSource, ValyuResult } from '@/lib/market-research/types';
 import { getPrismaClient } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -226,7 +226,7 @@ async function handler(request: NextRequest) {
           marketQuestion: market.question || '',
           verdict,
           confidence: bayesianResult.confidence,
-          result: result as Prisma.InputJsonValue,
+          result: result as unknown as Prisma.InputJsonValue,
           intermediateResults: intermediateResults ? (intermediateResults as Prisma.InputJsonValue) : null,
         },
       });

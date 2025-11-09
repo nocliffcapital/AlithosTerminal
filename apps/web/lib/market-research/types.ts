@@ -2,6 +2,8 @@
  * Type definitions for AI-powered market research system
  */
 
+import { Prisma } from '@prisma/client';
+
 export type SourceGrade = 'A' | 'B' | 'C' | 'D';
 
 export interface ValyuResult {
@@ -76,6 +78,10 @@ export interface MarketResearchResult {
   researchStrategy: ResearchStrategy;
   timestamp: string;
 }
+
+// Type that satisfies Prisma's JSON requirements
+// All nested types (GradedSource[], AnalysisResult, etc.) are JSON-serializable
+export type MarketResearchResultJson = MarketResearchResult & Prisma.InputJsonObject;
 
 
 

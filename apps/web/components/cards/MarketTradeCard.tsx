@@ -202,7 +202,12 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
   const hasEventInfo = eventId && (market as any).eventTitle;
   const eventMarkets = useMemo(() => {
     if (!eventId || !market) return [];
-    return allMarkets.filter(m => m.eventId === eventId && m.id !== market.id);
+    return allMarkets.filter(m => {
+      // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
+      const volume = m.volume || 0;
+      const liquidity = m.liquidity || 0;
+      return m.eventId === eventId && m.id !== market.id && (volume > 0 || liquidity > 0);
+    });
   }, [eventId, allMarkets, market]);
   
   // Get all markets in the event (including current market)
@@ -213,7 +218,14 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
     // First, try to find markets by eventId (most reliable method)
     // Check for both eventId and eventTitle to match MarketDiscoveryCard logic
     if (hasEventInfo) {
-      const markets = allMarkets.filter(m => m.eventId === eventId);
+      const markets = allMarkets.filter(m => {
+        // Always include current market, even if it has 0 volume
+        if (m.id === market.id) return true;
+        // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
+        const volume = m.volume || 0;
+        const liquidity = m.liquidity || 0;
+        return m.eventId === eventId && (volume > 0 || liquidity > 0);
+      });
       if (markets.length > 1) {
         // Sort by volume descending to show most active markets first
         return markets.sort((a, b) => (b.volume || 0) - (a.volume || 0));
@@ -279,6 +291,13 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
     if (match && eventPart) {
       // Find all markets that match this pattern with the same event part
       const relatedMarkets = allMarkets.filter(m => {
+        // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
+        const volume = m.volume || 0;
+        const liquidity = m.liquidity || 0;
+        if (volume === 0 && liquidity === 0 && m.id !== market.id) {
+          return false; // Exclude markets with 0 volume/liquidity (except current market)
+        }
+        
         if (m.id === market.id) return true; // Include current market
         const mQuestion = m.question || '';
         

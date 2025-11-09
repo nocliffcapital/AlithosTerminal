@@ -518,7 +518,7 @@ function MarketDiscoveryCardComponent() {
         }
         
         groupedResults.push({ type: 'group', group, key });
-      } else {
+      } else if (group.markets.length > 0 && group.markets[0]) {
         // Single market in Series group, treat as standalone
         standalone.push(group.markets[0]);
       }
@@ -529,7 +529,7 @@ function MarketDiscoveryCardComponent() {
       // Skip if already in Series group
       const alreadyInSeriesGroup = groupedResults.some(
         (item) => item.type === 'group' && item.group.markets.some((m: any) => 
-          group.markets.some((gm: any) => gm.id === m.id)
+          m && group.markets.some((gm: any) => gm && gm.id === m.id)
         )
       );
       
@@ -560,7 +560,7 @@ function MarketDiscoveryCardComponent() {
         }
         
         groupedResults.push({ type: 'group', group, key });
-      } else {
+      } else if (group.markets.length > 0 && group.markets[0]) {
         // Single market in event group, treat as standalone
         standalone.push(group.markets[0]);
       }
@@ -571,7 +571,7 @@ function MarketDiscoveryCardComponent() {
       // Skip if already in Series or Event group
       const alreadyGrouped = groupedResults.some(
         (item) => item.type === 'group' && item.group.markets.some((m: any) => 
-          group.markets.some((gm: any) => gm.id === m.id)
+          m && group.markets.some((gm: any) => gm && gm.id === m.id)
         )
       );
       
@@ -587,7 +587,7 @@ function MarketDiscoveryCardComponent() {
           return probB - probA;
         });
         groupedResults.push({ type: 'group', group, key });
-      } else {
+      } else if (group.markets.length > 0 && group.markets[0]) {
         // Single market in group, treat as standalone
         standalone.push(group.markets[0]);
       }
@@ -595,8 +595,13 @@ function MarketDiscoveryCardComponent() {
 
     // Add standalone markets (only if not already in a group)
     standalone.forEach((market) => {
+      // Skip if market is undefined or null
+      if (!market || !market.id) {
+        return;
+      }
+      
       const alreadyGrouped = groupedResults.some(
-        (item) => item.type === 'group' && item.group.markets.some((m: any) => m.id === market.id)
+        (item) => item.type === 'group' && item.group.markets.some((m: any) => m && m.id === market.id)
       );
       
       if (!alreadyGrouped) {
