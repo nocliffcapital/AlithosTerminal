@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { useMarket, useMarketPrice, useOrderBook, useHistoricalPrices, useMarkets, useTrades } from '@/lib/hooks/usePolymarketData';
+import { useMarket, useMarketPrice, useOrderBook, useHistoricalPrices, useMarkets, useTrades, useMarketHolders } from '@/lib/hooks/usePolymarketData';
 import { useClobAuth } from '@/lib/hooks/useClobAuth';
 import { usePrivy } from '@privy-io/react-auth';
 import { useTrading } from '@/lib/web3/trading';
@@ -428,6 +428,9 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
 
   // Fetch trades for traders tab
   const { data: trades = [], isLoading: isLoadingTrades } = useTrades((displayMarketId || effectiveMarketId) || null);
+  
+  // Fetch holders for holders tab
+  const { data: holders = [], isLoading: isLoadingHolders } = useMarketHolders((displayMarketId || effectiveMarketId) || null, 100);
 
   // Aggregate trader statistics from trades
   const traderStats = useMemo(() => {
@@ -883,7 +886,7 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
             )}
           >
-            Traders
+            Holders
           </button>
         </div>
         {/* Market Selector Dropdown - on the right */}
@@ -1337,33 +1340,37 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
 
       {activeTab === 'traders' && (
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {isLoadingTrades ? (
+          {isLoadingHolders ? (
             <div className="flex items-center justify-center h-full">
-              <LoadingSpinner size="sm" text="Loading traders..." />
+              <LoadingSpinner size="sm" text="Loading holders..." />
             </div>
-          ) : trades.length === 0 ? (
+          ) : holders.length === 0 ? (
             <EmptyState
               icon={Users}
-              title="No traders found"
-              description="No recent trades found for this market. Traders will appear here as they make trades."
+              title="No holders found"
+              description="No current positions found for this market. Holders will appear here as people acquire positions."
               className="p-4"
             />
           ) : (
             <>
-              {/* Trader Statistics Summary */}
+              {/* Holders Statistics Summary */}
               <div className="border border-border rounded-lg p-3 bg-card">
                 <div className="flex items-center gap-2 mb-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-xs font-semibold">Active Traders ({traderStats.length})</span>
+                  <span className="text-xs font-semibold">Total Holders ({holders.length})</span>
                 </div>
                 <div className="text-[10px] text-muted-foreground">
-                  Based on {trades.length} recent trades
+                  {holders.length > 0 && (
+                    <>
+                      Total value: {formatDollars(holders.reduce((sum, h) => sum + h.totalValue, 0))}
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Trader List */}
+              {/* Top Holders List */}
               <div className="space-y-2">
-                {traderStats.map((trader) => {
+                {holders.map((holder) => {
                   const formatAddress = (addr: string) => {
                     if (addr === 'Unknown' || !addr) return 'Unknown';
                     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -1375,24 +1382,16 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
                     return `$${value.toFixed(2)}`;
                   };
 
-                  const formatTime = (timestamp: number) => {
-                    const date = new Date(timestamp);
-                    const now = Date.now();
-                    const diffMs = now - timestamp;
-                    const diffMins = Math.floor(diffMs / 60000);
-                    const diffHours = Math.floor(diffMs / 3600000);
-                    const diffDays = Math.floor(diffMs / 86400000);
-
-                    if (diffMins < 1) return 'just now';
-                    if (diffMins < 60) return `${diffMins}m ago`;
-                    if (diffHours < 24) return `${diffHours}h ago`;
-                    if (diffDays < 7) return `${diffDays}d ago`;
-                    return date.toLocaleDateString();
+                  const formatShares = (shares: string) => {
+                    const num = parseFloat(shares);
+                    if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+                    if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+                    return num.toFixed(2);
                   };
 
                   return (
                     <div
-                      key={trader.address}
+                      key={holder.user}
                       className="border border-border rounded-lg p-3 bg-card hover:bg-accent/20 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -1401,20 +1400,20 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
                             <Wallet className="h-3 w-3 text-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs font-semibold truncate" title={trader.address}>
-                              {formatAddress(trader.address)}
+                            <div className="text-xs font-semibold truncate" title={holder.user}>
+                              {formatAddress(holder.user)}
                             </div>
                             <div className="text-[10px] text-muted-foreground">
-                              {trader.totalTrades} trade{trader.totalTrades !== 1 ? 's' : ''} • Last {formatTime(trader.lastTradeTime)}
+                              {holder.positions.length} position{holder.positions.length !== 1 ? 's' : ''}
                             </div>
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <div className="text-xs font-mono font-semibold">
-                            {formatCurrency(trader.totalVolume)}
+                            {formatCurrency(holder.totalValue)}
                           </div>
                           <div className="text-[10px] text-muted-foreground">
-                            Total Volume
+                            Total Value
                           </div>
                         </div>
                       </div>
@@ -1422,62 +1421,64 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
                       <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-border/50">
                         <div className="text-center">
                           <div className="text-xs font-semibold text-green-400">
-                            {trader.yesTrades}
+                            {formatShares(holder.yesAmount)}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">YES</div>
+                          <div className="text-[10px] text-muted-foreground">YES Shares</div>
                         </div>
                         <div className="text-center">
                           <div className="text-xs font-semibold text-red-400">
-                            {trader.noTrades}
+                            {formatShares(holder.noAmount)}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">NO</div>
+                          <div className="text-[10px] text-muted-foreground">NO Shares</div>
                         </div>
                         <div className="text-center">
                           <div className="text-xs font-mono font-semibold">
-                            ${trader.avgPrice.toFixed(3)}
+                            {formatShares(holder.totalAmount)}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">Avg Price</div>
+                          <div className="text-[10px] text-muted-foreground">Total Shares</div>
                         </div>
                       </div>
 
-                      {/* Recent Trades Preview */}
-                      {trader.trades.slice(0, 3).length > 0 && (
+                      {/* Positions Breakdown */}
+                      {holder.positions.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-border/50">
                           <div className="text-[10px] font-semibold text-muted-foreground mb-1">
-                            Recent Trades:
+                            Positions:
                           </div>
                           <div className="space-y-1">
-                            {trader.trades.slice(0, 3).map((trade) => (
+                            {holder.positions.slice(0, 3).map((position, idx) => (
                               <div
-                                key={trade.id}
+                                key={`${holder.user}-${position.outcome}-${idx}`}
                                 className="flex items-center justify-between text-[10px]"
                               >
                                 <div className="flex items-center gap-1.5">
-                                  {trade.outcome === 'YES' ? (
+                                  {position.outcome === 'YES' || position.outcome === '1' ? (
                                     <TrendingUp className="h-2.5 w-2.5 text-green-400" />
                                   ) : (
                                     <TrendingDown className="h-2.5 w-2.5 text-red-400" />
                                   )}
                                   <span className={cn(
                                     "font-semibold",
-                                    trade.outcome === 'YES' ? "text-green-400" : "text-red-400"
+                                    (position.outcome === 'YES' || position.outcome === '1') ? "text-green-400" : "text-red-400"
                                   )}>
-                                    {trade.outcome}
+                                    {position.outcome}
                                   </span>
                                   <span className="text-muted-foreground">
-                                    {formatUnits(BigInt(Math.floor(parseFloat(trade.amount || '0'))), 6)}
+                                    {formatShares(position.amount)} shares
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono">
-                                    ${trade.price.toFixed(3)}
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    {formatTime(trade.timestamp)}
+                                    {formatCurrency(position.currentValue)}
                                   </span>
                                 </div>
                               </div>
                             ))}
+                            {holder.positions.length > 3 && (
+                              <div className="text-[10px] text-muted-foreground text-center pt-1">
+                                +{holder.positions.length - 3} more position{holder.positions.length - 3 !== 1 ? 's' : ''}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}

@@ -99,11 +99,17 @@ export const useThemeStore = create<ThemeState>()(
       storage: createJSONStorage(() => {
         if (typeof window === 'undefined') {
           // Return a no-op storage for SSR
-          return {
+          const noopStorage: Storage = {
             getItem: () => null,
-            setItem: () => {},
-            removeItem: () => {},
-          } as Storage;
+            setItem: () => undefined,
+            removeItem: () => undefined,
+            clear: () => undefined,
+            key: () => null,
+            get length() {
+              return 0;
+            },
+          };
+          return noopStorage;
         }
         return localStorage;
       }),

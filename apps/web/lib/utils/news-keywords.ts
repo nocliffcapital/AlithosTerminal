@@ -271,6 +271,24 @@ function extractMarketEntities(question: string, category?: string): MarketEntit
     entities.dates.push(...yearMatches);
   }
   
+  // Extract dates (e.g., "December 31", "Dec 31", "12/31")
+  const datePatterns = [
+    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\b/gi,
+    /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b/gi,
+    /\b\d{1,2}\/\d{1,2}\b/g,
+  ];
+  
+  for (const pattern of datePatterns) {
+    const dateMatches = question.match(pattern);
+    if (dateMatches) {
+      dateMatches.forEach(date => {
+        if (!entities.dates.includes(date)) {
+          entities.dates.push(date);
+        }
+      });
+    }
+  }
+  
   // Extract quoted phrases (products, movies, books, specific names)
   const quotedPhrases = question.match(/["']([^"']+)["']/g);
   if (quotedPhrases) {
@@ -451,6 +469,14 @@ function scoreKeywords(keywords: string[], market: Market): ScoredKeyword[] {
       score += 12;
     }
     
+    // Cryptocurrency names get high scores (common crypto names)
+    const commonCryptos = ['bitcoin', 'ethereum', 'btc', 'eth', 'solana', 'sol', 'cardano', 'ada', 
+                           'polkadot', 'dot', 'chainlink', 'link', 'avalanche', 'avax', 'polygon', 
+                           'matic', 'litecoin', 'ltc', 'dogecoin', 'doge', 'ripple', 'xrp'];
+    if (commonCryptos.includes(normalized)) {
+      score += 15;
+    }
+    
     // Length scoring (longer = more specific)
     if (keyword.length >= 10) {
       score += 5;
@@ -462,6 +488,12 @@ function scoreKeywords(keywords: string[], market: Market): ScoredKeyword[] {
     if (market.category) {
       const categoryLower = market.category.toLowerCase();
       const keywordLower = normalized;
+      
+      // Crypto keywords for crypto markets
+      if ((categoryLower.includes('crypto') || categoryLower.includes('cryptocurrency')) &&
+          (commonCryptos.includes(keywordLower) || keyword[0] === keyword[0].toUpperCase())) {
+        score += 10; // Boost crypto names in crypto markets
+      }
       
       // Sports keywords for sports markets
       if (categoryLower.includes('sport') && (
@@ -563,7 +595,29 @@ function extractCoreKeywords(market: Market): CoreKeywords {
   entities.people.forEach(person => addKeyword(person, 'primary'));
   entities.products.forEach(product => addKeyword(product, 'primary'));
   
-  // Secondary keywords: Years, locations, other proper nouns
+  // Treat other proper nouns (like Bitcoin, Ethereum, product names) as primary keywords
+  // These are important identifiers that should be prioritized
+  entities.other.forEach(other => {
+    const normalized = other.toLowerCase();
+    // Check if it looks like a cryptocurrency name or other important proper noun
+    const commonCryptos = ['bitcoin', 'ethereum', 'btc', 'eth', 'solana', 'sol', 'cardano', 'ada', 
+                           'polkadot', 'dot', 'chainlink', 'link', 'avalanche', 'avax', 'polygon', 
+                           'matic', 'litecoin', 'ltc', 'dogecoin', 'doge', 'ripple', 'xrp'];
+    
+    // If it's a known crypto or a capitalized proper noun, treat as primary
+    if (commonCryptos.includes(normalized) || 
+        (other[0] === other[0].toUpperCase() && 
+         !STOP_WORDS.has(normalized) && 
+         !GENERIC_TERMS.has(normalized) &&
+         other.length >= 3)) {
+      addKeyword(other, 'primary');
+    } else {
+      // Other proper nouns go to secondary
+      addKeyword(other, 'secondary');
+    }
+  });
+  
+  // Secondary keywords: Years, locations
   entities.dates.forEach(date => addKeyword(date, 'secondary'));
   entities.locations.forEach(location => addKeyword(location, 'secondary'));
   
@@ -581,11 +635,33 @@ function extractCoreKeywords(market: Market): CoreKeywords {
     }
   }
   
+  // Extract price targets (e.g., "$250,000", "$250k", "250k")
+  const pricePatterns = [
+    /\$[\d,]+(?:\.\d+)?[kmb]?/gi, // $250,000, $250k, $250m
+    /\b[\d,]+(?:\.\d+)?[kmb]\b/gi, // 250k, 250m, 1b
+  ];
+  
+  for (const pattern of pricePatterns) {
+    const priceMatches = market.question.match(pattern);
+    if (priceMatches) {
+      // Add significant price targets as secondary keywords (only if they're meaningful)
+      priceMatches.forEach(price => {
+        const cleanPrice = price.replace(/[$,]/g, '').toLowerCase();
+        // Only add if it's a significant amount (e.g., > 1000 or has k/m/b suffix)
+        if (cleanPrice.includes('k') || cleanPrice.includes('m') || cleanPrice.includes('b') || 
+            parseFloat(cleanPrice) >= 1000) {
+          addKeyword(price, 'secondary');
+        }
+      });
+    }
+  }
+  
   // Other specific terms from question (filtered for generic terms)
   const questionWords = market.question
     .toLowerCase()
     .replace(/["'][^"']+["']/g, '') // Remove quoted phrases
     .replace(/\b(19|20)\d{2}\b/g, '') // Remove years
+    .replace(/\$[\d,]+(?:\.\d+)?[kmb]?/gi, '') // Remove price targets
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
     .filter(word => 

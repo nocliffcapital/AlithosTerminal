@@ -2646,6 +2646,171 @@ class PolymarketClient {
   }
 
   /**
+   * Get holders (positions) for a specific market from P&L subgraph
+   * Returns all positions for a market, aggregated by user
+   */
+  async getMarketHolders(marketId: string, limit: number = 100): Promise<Array<{
+    user: string;
+    totalAmount: string;
+    totalValue: number;
+    yesAmount: string;
+    noAmount: string;
+    positions: Array<{
+      outcome: string;
+      amount: string;
+      costBasis: number;
+      currentValue: number;
+    }>;
+  }>> {
+    if (!SUBGRAPH_URL && !SUBGRAPH_API_KEY) {
+      return [];
+    }
+
+    try {
+      // Try to get conditionId from market (subgraph might use conditionId instead of marketId)
+      let conditionId: string | undefined;
+      try {
+        const market = await this.getMarket(marketId);
+        conditionId = market?.conditionId;
+      } catch (error) {
+        console.warn('[getMarketHolders] Could not fetch market for conditionId:', error);
+      }
+
+      // Try querying with marketId first, then conditionId if available
+      let query = `
+        query GetMarketHolders($marketId: String!, $limit: Int!) {
+          positions(
+            where: { marketId: $marketId, amount_gt: "0" }
+            first: $limit
+            orderBy: currentValue
+            orderDirection: desc
+          ) {
+            id
+            user
+            marketId
+            conditionId
+            outcome
+            amount
+            costBasis
+            currentValue
+            realizedPnL
+            unrealizedPnL
+          }
+        }
+      `;
+
+      let data = await this.fetchSubgraph<{ positions: any[] }>(
+        query,
+        { marketId, limit },
+        'pnl',
+        SUBGRAPH_ID_PNL
+      );
+
+      // If no results and we have conditionId, try querying by conditionId
+      if ((!data.positions || data.positions.length === 0) && conditionId) {
+        query = `
+          query GetMarketHoldersByCondition($conditionId: String!, $limit: Int!) {
+            positions(
+              where: { conditionId: $conditionId, amount_gt: "0" }
+              first: $limit
+              orderBy: currentValue
+              orderDirection: desc
+            ) {
+              id
+              user
+              marketId
+              conditionId
+              outcome
+              amount
+              costBasis
+              currentValue
+              realizedPnL
+              unrealizedPnL
+            }
+          }
+        `;
+
+        data = await this.fetchSubgraph<{ positions: any[] }>(
+          query,
+          { conditionId, limit },
+          'pnl',
+          SUBGRAPH_ID_PNL
+        );
+      }
+
+      if (!data.positions || data.positions.length === 0) {
+        return [];
+      }
+
+      // Aggregate positions by user
+      const holdersMap = new Map<string, {
+        user: string;
+        totalAmount: number;
+        totalValue: number;
+        yesAmount: number;
+        noAmount: number;
+        positions: Array<{
+          outcome: string;
+          amount: string;
+          costBasis: number;
+          currentValue: number;
+        }>;
+      }>();
+
+      data.positions.forEach((pos: any) => {
+        const user = pos.user || 'Unknown';
+        const amount = parseFloat(pos.amount || '0');
+        const currentValue = parseFloat(pos.currentValue || '0');
+        const costBasis = parseFloat(pos.costBasis || '0');
+        const outcome = pos.outcome || 'YES';
+
+        if (amount <= 0) return; // Skip zero positions
+
+        const existing = holdersMap.get(user) || {
+          user,
+          totalAmount: 0,
+          totalValue: 0,
+          yesAmount: 0,
+          noAmount: 0,
+          positions: [],
+        };
+
+        existing.totalAmount += amount;
+        existing.totalValue += currentValue;
+        existing.positions.push({
+          outcome,
+          amount: pos.amount,
+          costBasis,
+          currentValue,
+        });
+
+        if (outcome === 'YES' || outcome === '1') {
+          existing.yesAmount += amount;
+        } else {
+          existing.noAmount += amount;
+        }
+
+        holdersMap.set(user, existing);
+      });
+
+      // Convert to array and sort by total value descending
+      const holders = Array.from(holdersMap.values())
+        .map(holder => ({
+          ...holder,
+          totalAmount: holder.totalAmount.toString(),
+          yesAmount: holder.yesAmount.toString(),
+          noAmount: holder.noAmount.toString(),
+        }))
+        .sort((a, b) => b.totalValue - a.totalValue);
+
+      return holders;
+    } catch (error) {
+      console.error('Error fetching market holders:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get orderbook data from Orderbook subgraph
    */
   async getOrderbookFromSubgraph(marketId: string, outcome: 'YES' | 'NO'): Promise<any> {

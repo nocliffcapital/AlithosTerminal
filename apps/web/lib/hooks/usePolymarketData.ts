@@ -798,6 +798,28 @@ export function useOrderBook(
 }
 
 /**
+ * Hook to fetch market holders (people who currently hold positions)
+ * Uses P&L subgraph to get positions for a market
+ */
+export function useMarketHolders(marketId: string | null, limit: number = 100) {
+  return useQuery({
+    queryKey: ['market-holders', marketId, limit],
+    queryFn: async () => {
+      if (!marketId) return [];
+      return polymarketClient.getMarketHolders(marketId, limit);
+    },
+    enabled: !!marketId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - positions change less frequently
+    refetchInterval: 5 * 60 * 1000, // 5 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes cache time
+    refetchOnMount: false,
+    placeholderData: (previousData) => previousData,
+    retry: 2,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
  * Hook to fetch recent trades for a market
  * Uses Activity Subgraph (no API key needed) or CLOB API if available
  */
