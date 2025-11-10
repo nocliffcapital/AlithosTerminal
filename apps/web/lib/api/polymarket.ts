@@ -2772,7 +2772,12 @@ class PolymarketClient {
           totalValue: 0,
           yesAmount: 0,
           noAmount: 0,
-          positions: [],
+          positions: [] as Array<{
+            outcome: string;
+            amount: string;
+            costBasis: number;
+            currentValue: number;
+          }>,
         };
 
         existing.totalAmount += amount;
