@@ -66,7 +66,7 @@ export function NetworkValidationBanner() {
   return (
     <div 
       ref={bannerRef}
-      className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/15 border-b border-amber-500/30 backdrop-blur-sm"
+      className="w-full sticky top-0 z-50 bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/15 border-b border-amber-500/30 backdrop-blur-sm"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-4">

@@ -35,7 +35,6 @@ const OrderCreatorCard = React.lazy(() => import('@/components/cards/OrderCreato
 const PositionsCard = React.lazy(() => import('@/components/cards/PositionsCard').then(m => ({ default: m.PositionsCard })));
 const TransactionHistoryCard = React.lazy(() => import('@/components/cards/TransactionHistoryCard').then(m => ({ default: m.default })));
 const OrderHistoryCard = React.lazy(() => import('@/components/cards/OrderHistoryCard').then(m => ({ default: m.default })));
-const TeamManagementCard = React.lazy(() => import('@/components/cards/TeamManagementCard').then(m => ({ default: m.default })));
 const JournalCard = React.lazy(() => import('@/components/cards/JournalCard').then(m => ({ default: m.default })));
 const CommentsCard = React.lazy(() => import('@/components/cards/CommentsCard').then(m => ({ default: m.default })));
 const KellyCalculatorCard = React.lazy(() => import('@/components/cards/KellyCalculatorCard').then(m => ({ default: m.KellyCalculatorCard })));
@@ -946,8 +945,6 @@ function CardContent({
         return <TransactionHistoryCard />;
       case 'order-history':
         return <OrderHistoryCard />;
-      case 'team-management':
-        return <TeamManagementCard />;
       case 'journal':
         return <JournalCard />;
       case 'comments':

@@ -23,7 +23,6 @@ export type CardType =
   | 'positions'
   | 'transaction-history'
   | 'order-history'
-  | 'team-management'
   | 'journal'
   | 'comments'
   | 'kelly-calculator'
@@ -166,7 +165,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
   workspaces: {},
   currentLayout: null,
   _pendingFetches: new Map(),
-  favouriteCardTypes: loadFavouritesFromStorage(),
+  favouriteCardTypes: typeof window !== 'undefined' ? loadFavouritesFromStorage() : [],
   linkGroups: {},
   linkSelectionMode: false,
   selectedCardIdsForLinking: new Set<string>(),
@@ -185,16 +184,34 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       return;
     }
     
-    // Save current workspace layout before switching (non-blocking, only if it has changed)
-    if (currentWorkspaceId && currentLayout && currentLayout.cards.length > 0) {
-      // Don't await - let save run in background without blocking workspace switch
-      get()._saveLayoutIfChanged().catch(() => {
-        // Silent fail - we'll save on next switch or unmount
-      });
+    // Save current workspace layout to in-memory cache before switching
+    if (currentWorkspaceId && currentLayout) {
+      // Save to in-memory cache immediately
+      set((state) => ({
+        workspaces: {
+          ...state.workspaces,
+          [currentWorkspaceId]: {
+            ...currentLayout,
+            _lastLoaded: Date.now(),
+          },
+        },
+      }));
+      
+      // Save to database (non-blocking, only if it has changed)
+      if (currentLayout.cards.length > 0) {
+        // Don't await - let save run in background without blocking workspace switch
+        get()._saveLayoutIfChanged().catch((err) => {
+          console.error('[setCurrentWorkspace] Failed to save layout before switching:', err);
+          // Continue anyway - we'll save on next switch or unmount
+        });
+      }
     }
     
+    // Get updated workspaces state after saving current layout
+    const updatedWorkspaces = get().workspaces;
+    
     // Check if layout is already cached in memory and recent (less than 5 minutes old)
-    let layout = workspaces[id];
+    let layout = updatedWorkspaces[id];
     const CACHE_TTL = 5 * 60 * 1000; // 5 minutes (increased from 30 seconds)
     
     if (layout && layout._lastLoaded && (Date.now() - layout._lastLoaded < CACHE_TTL)) {
@@ -284,7 +301,7 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
     
     // If layout exists in memory but not from DB, use memory version
     if (!layout) {
-      layout = workspaces[id];
+      layout = updatedWorkspaces[id];
     }
     
     // If no layout exists after trying to load, create a default one with a few starter cards
@@ -715,13 +732,9 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       return;
     }
 
-    // If no userId is set, try to get it from the auth hook
+    // If no userId is set, the API will get it from the workspace
+    // This allows saves to work even if userId isn't set in the store yet
     let actualUserId = userId;
-    if (!actualUserId) {
-      // We'll need to set userId from the page component
-      console.warn('No userId set in layout store - layout not saved');
-      return;
-    }
 
     // Serialize layout for comparison (excluding metadata)
     const { _lastLoaded, _lastSaved, ...layoutToSave } = currentLayout;

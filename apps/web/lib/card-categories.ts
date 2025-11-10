@@ -6,7 +6,6 @@ export type CardCategory =
   | 'Research'
   | 'Risk Management'
   | 'Automation'
-  | 'Team'
   | 'Utilities';
 
 export interface CardTypeInfo {
@@ -49,9 +48,6 @@ export const cardCategories: Record<CardCategory, CardTypeInfo[]> = {
     { type: 'price-converter', label: 'Price Converter', category: 'Risk Management' },
   ],
   'Automation': [],
-  'Team': [
-    { type: 'team-management', label: 'Team Management', category: 'Team' },
-  ],
   'Utilities': [
     { type: 'journal', label: 'Journal', category: 'Utilities' },
     { type: 'comments', label: 'Comments', category: 'Utilities' },

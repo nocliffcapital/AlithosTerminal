@@ -375,8 +375,10 @@ export function WorkspaceGrid() {
           )}
           
           {/* Categories */}
-          {(['Trading', 'Analysis', 'Research', 'Risk Management', 'Automation', 'Team', 'Utilities'] as CardCategory[]).map((category, categoryIndex) => {
-            const cards = cardCategories[category].filter(({ type }) => !isFavouriteCardType(type));
+          {(['Trading', 'Analysis', 'Research', 'Risk Management', 'Automation', 'Utilities'] as CardCategory[]).map((category, categoryIndex) => {
+            const categoryCards = cardCategories[category];
+            if (!categoryCards) return null;
+            const cards = categoryCards.filter(({ type }) => !isFavouriteCardType(type));
             if (cards.length === 0) return null;
             
             return (

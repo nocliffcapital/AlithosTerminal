@@ -18,6 +18,13 @@ interface Presets {
 
 // Helper function to load presets from localStorage
 const loadPresetsFromStorage = (): Presets => {
+  if (typeof window === 'undefined') {
+    return {
+      buyPreset: DEFAULT_BUY_PRESET,
+      sellPreset: DEFAULT_SELL_PRESET,
+      slippagePreset: DEFAULT_SLIPPAGE_PRESET,
+    };
+  }
   try {
     const stored = localStorage.getItem(PRESETS_STORAGE_KEY);
     if (stored) {

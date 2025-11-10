@@ -96,7 +96,17 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: 'theme-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => {
+        if (typeof window === 'undefined') {
+          // Return a no-op storage for SSR
+          return {
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {},
+          } as Storage;
+        }
+        return localStorage;
+      }),
       partialize: (state) => ({
         currentTheme: state.currentTheme,
         customThemes: state.customThemes,

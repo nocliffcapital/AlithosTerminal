@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Market } from '@/lib/api/polymarket';
-import { extractNewsKeywords, keywordsToQuery } from '@/lib/utils/news-keywords';
+import { extractNewsKeywords, keywordsToQuery, CoreKeywords } from '@/lib/utils/news-keywords';
 
 export interface NewsArticle {
   title: string;
@@ -44,27 +44,43 @@ export interface UseAdjacentNewsParams {
 export function useAdjacentNews(params: UseAdjacentNewsParams) {
   const { market, days = 7, limit = 10, excludeDomains, includeDomains, enabled = true } = params;
 
-  // Extract keywords from market
-  const keywords = market ? extractNewsKeywords(market) : [];
+  // Extract structured keywords from market
+  const keywords = market ? extractNewsKeywords(market) : { primary: [], secondary: [], related: [] };
+  
+  // Check if we have any keywords
+  const hasKeywords = keywords.primary.length > 0 || keywords.secondary.length > 0 || keywords.related.length > 0;
+  
+  // Build core keywords (primary + secondary) for AND logic
+  const coreKeywords = [...keywords.primary, ...keywords.secondary].filter(k => k && k.trim().length > 0);
+  
+  // Build related keywords for OR logic (optional)
+  const relatedKeywords = keywords.related.filter(k => k && k.trim().length > 0);
+  
+  // For backward compatibility, also build a query string
   const keywordsQuery = keywordsToQuery(keywords);
 
   return useQuery({
-    queryKey: ['adjacent-news', market?.id, keywordsQuery, days, limit, excludeDomains, includeDomains],
+    queryKey: ['adjacent-news', market?.id, coreKeywords.join(','), relatedKeywords.join(','), days, limit, excludeDomains, includeDomains],
     queryFn: async (): Promise<NewsResponse> => {
       if (!market) {
         throw new Error('Market is required');
       }
 
-      if (keywords.length === 0) {
+      if (!hasKeywords || coreKeywords.length === 0) {
         throw new Error('No keywords extracted from market');
       }
 
       // Build query parameters
       const queryParams = new URLSearchParams({
-        keywords: keywordsQuery,
+        coreKeywords: coreKeywords.join(','), // Use structured format
         days: days.toString(),
         limit: limit.toString(),
       });
+
+      // Add related keywords if available
+      if (relatedKeywords.length > 0) {
+        queryParams.append('relatedKeywords', relatedKeywords.join(','));
+      }
 
       if (excludeDomains) {
         queryParams.append('excludeDomains', excludeDomains);
@@ -78,8 +94,10 @@ export function useAdjacentNews(params: UseAdjacentNewsParams) {
       const apiUrl = `/api/newsapi-ai?${queryParams.toString()}`;
       
       console.log('[useAdjacentNews] Fetching news for market:', market.question);
-      console.log('[useAdjacentNews] Extracted keywords:', keywords);
-      console.log('[useAdjacentNews] Keywords query string:', keywordsQuery);
+      console.log('[useAdjacentNews] Extracted keywords (structured):', keywords);
+      console.log('[useAdjacentNews] Core keywords:', coreKeywords);
+      console.log('[useAdjacentNews] Related keywords:', relatedKeywords);
+      console.log('[useAdjacentNews] Keywords query string (legacy):', keywordsQuery);
 
       const response = await fetch(apiUrl);
 
@@ -121,7 +139,7 @@ export function useAdjacentNews(params: UseAdjacentNewsParams) {
       
       return data;
     },
-    enabled: enabled && !!market && keywords.length > 0,
+    enabled: enabled && !!market && hasKeywords && coreKeywords.length > 0,
     staleTime: 5 * 60 * 1000, // 5 minutes - news doesn't change as frequently as prices
     retry: 2,
     refetchOnWindowFocus: false,

@@ -9,14 +9,18 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const keywords = searchParams.get('keywords');
+    const coreKeywords = searchParams.get('coreKeywords');
+    const relatedKeywords = searchParams.get('relatedKeywords');
+    const phrases = searchParams.get('phrases');
     const days = searchParams.get('days') ?? '7';
     const limit = searchParams.get('limit') ?? '10';
     const excludeDomains = searchParams.get('excludeDomains');
     const includeDomains = searchParams.get('includeDomains');
 
-    if (!keywords) {
+    // Support both old format (keywords) and new format (coreKeywords + relatedKeywords)
+    if (!keywords && !coreKeywords) {
       return NextResponse.json(
-        { error: 'Keywords query parameter is required' },
+        { error: 'Keywords or coreKeywords query parameter is required' },
         { status: 400 }
       );
     }
@@ -41,27 +45,48 @@ export async function GET(request: NextRequest) {
     // API key should be in request body, not headers
     const baseUrl = 'https://eventregistry.org/api/v1/article/getArticles';
 
-    console.log('[NewsAPI.ai] Fetching news for keywords:', keywords);
-    console.log('[NewsAPI.ai] Using API key:', apiKey.substring(0, 8) + '...');
-
     const daysNum = parseInt(days, 10);
 
-    // Event Registry supports keyword as string or string array
-    // For better results, we'll use keywords as an array with OR logic
-    // This allows Event Registry to find articles containing ANY of the keywords
-    // This is more flexible than requiring ALL keywords (AND logic)
-    const keywordArray = typeof keywords === 'string' 
-      ? keywords.split(' ').filter(k => k.trim().length > 0)
-      : Array.isArray(keywords) 
-        ? keywords
-        : [String(keywords)];
+    // Determine which keyword format to use
+    let keywordArray: string[] = [];
+    let keywordOper: 'and' | 'or' = 'or';
+    let queryString: string = '';
+    
+    if (coreKeywords) {
+      // New structured format: use AND logic for core keywords (must-have)
+      const coreArray = coreKeywords.split(',').map(k => k.trim()).filter(k => k.length > 0);
+      const relatedArray = relatedKeywords 
+        ? relatedKeywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+        : [];
+      
+      // For now, use AND logic for core keywords to ensure relevance
+      // Event Registry will require all core keywords to be present
+      keywordArray = coreArray;
+      keywordOper = 'and'; // Use AND logic for core keywords (must appear in article)
+      queryString = coreKeywords + (relatedKeywords ? ` (related: ${relatedKeywords})` : '');
+      
+      console.log('[NewsAPI.ai] Using structured keywords (core + related)');
+      console.log('[NewsAPI.ai] Core keywords:', coreArray);
+      console.log('[NewsAPI.ai] Related keywords:', relatedArray);
+      console.log('[NewsAPI.ai] Using AND logic for core keywords');
+    } else if (keywords) {
+      // Legacy format: split by spaces and use OR logic
+      keywordArray = keywords.split(' ').filter(k => k.trim().length > 0);
+      keywordOper = 'or'; // Use OR logic for backward compatibility
+      queryString = keywords;
+      
+      console.log('[NewsAPI.ai] Using legacy keyword format');
+    }
+
+    console.log('[NewsAPI.ai] Fetching news for keywords:', queryString || keywords);
+    console.log('[NewsAPI.ai] Using API key:', apiKey.substring(0, 8) + '...');
 
     // Build request body according to Event Registry API documentation
     // Use forceMaxDataTimeWindow for efficient token usage when possible
     const requestBody: any = {
       action: 'getArticles',
       keyword: keywordArray, // Use array instead of string
-      keywordOper: 'or', // Use OR logic - articles containing ANY keyword
+      keywordOper: keywordOper, // Use AND logic for core keywords, OR for legacy
       articlesPage: 1,
       articlesCount: parseInt(limit, 10),
       articlesSortBy: 'date',
@@ -70,6 +95,16 @@ export async function GET(request: NextRequest) {
       dataType: ['news', 'pr'],
       apiKey: apiKey, // API key in request body, not headers!
     };
+    
+    // Add phrase matching if provided (for multi-word entities)
+    if (phrases) {
+      const phraseArray = phrases.split(',').map(p => p.trim()).filter(p => p.length > 0);
+      // Event Registry supports conceptUri for exact phrase matching
+      // For now, we'll include phrases in the keyword array with quotes
+      // Note: Event Registry may not support exact phrase matching directly
+      // This is a placeholder for future enhancement
+      console.log('[NewsAPI.ai] Phrases for exact matching:', phraseArray);
+    }
 
     console.log('[NewsAPI.ai] Request body:', JSON.stringify(requestBody, null, 2));
 
@@ -262,18 +297,22 @@ export async function GET(request: NextRequest) {
     const responseData = {
       data: mappedArticles,
       meta: {
-        query: keywords,
+        query: queryString || keywords,
         days: parseInt(days, 10),
         limit: parseInt(limit, 10),
         totalResults: totalResults,
         searchTime: data.searchTime || new Date().toISOString(),
         ...(excludeDomains && { excludeDomains: excludeDomains.split(',').map(d => d.trim()) }),
         ...(includeDomains && { includeDomains: includeDomains.split(',').map(d => d.trim()) }),
+        ...(coreKeywords && { coreKeywords: coreKeywords.split(',').map(k => k.trim()) }),
+        ...(relatedKeywords && { relatedKeywords: relatedKeywords.split(',').map(k => k.trim()) }),
         ...(process.env.NODE_ENV === 'development' && {
           debug: {
-            keywordsReceived: keywords,
+            keywordsReceived: keywords || coreKeywords,
             keywordArray: keywordArray,
-            keywordOper: 'or',
+            keywordOper: keywordOper,
+            coreKeywords: coreKeywords,
+            relatedKeywords: relatedKeywords,
             requestBody: requestBody,
             rawResponseStructure: {
               hasArticles: !!data.articles,

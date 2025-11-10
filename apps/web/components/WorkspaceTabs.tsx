@@ -477,8 +477,8 @@ export function WorkspaceTabs() {
   const hasWorkspaces = visibleWorkspaces.length > 0;
 
   return (
-    <div className="border-b border-border bg-background/95 backdrop-blur-sm relative">
-      <div className="flex items-end gap-0 px-2 py-0 overflow-x-auto scrollbar-hide">
+    <div className="border-b border-border bg-background/95 backdrop-blur-sm relative z-20">
+      <div className="flex items-end gap-0 px-2 py-0 overflow-x-auto scrollbar-hide min-h-[44px]">
         {hasWorkspaces ? (
           visibleWorkspaces.map((workspace: any, index: number) => {
             const isActive = workspace.id === currentWorkspaceId;
@@ -659,7 +659,7 @@ export function WorkspaceTabs() {
         ) : (
           // Show a placeholder tab when there are no workspaces
           <div className="flex items-center justify-center gap-2 px-4 py-3 min-w-[180px] h-[44px] bg-card border-t-2 border-l border-r border-t-primary border-border text-foreground z-10 border-b border-b-card -mb-[1px] shadow-sm">
-            <span className="text-xs font-semibold text-muted-foreground">No workspaces</span>
+            <span className="text-xs font-semibold text-foreground">No workspaces</span>
           </div>
         )}
         

@@ -62,7 +62,7 @@ export default function ProfilePage() {
   };
 
   // Fetch PnL data
-  const { data: pnlData = [] } = useQuery({
+  const { data: pnlData = [], isLoading: isLoadingPnL, isSuccess: isSuccessPnL } = useQuery({
     queryKey: ['pnl', walletAddress],
     queryFn: async () => {
       if (!walletAddress) return [];
@@ -74,7 +74,30 @@ export default function ProfilePage() {
 
   // Calculate metrics from PnL data
   const accountMetrics = useMemo(() => {
-    if (!pnlData || pnlData.length === 0) {
+    // If still loading, show loading state
+    if (isLoadingPnL) {
+      return {
+        holdings: 'Loading...',
+        usdc: '$0.00',
+        pnl: 'Loading...',
+        volume: 'Loading...',
+        marketsTraded: '0',
+      };
+    }
+    
+    // If loaded successfully but no data, show N/A or $0.00
+    if (isSuccessPnL && (!pnlData || pnlData.length === 0)) {
+      return {
+        holdings: '$0.00',
+        usdc: '$0.00',
+        pnl: '$0.00',
+        volume: 'N/A',
+        marketsTraded: '0',
+      };
+    }
+    
+    // If query hasn't completed yet and no data, show loading
+    if (!isSuccessPnL && (!pnlData || pnlData.length === 0)) {
       return {
         holdings: 'Loading...',
         usdc: '$0.00',
@@ -101,10 +124,10 @@ export default function ProfilePage() {
       holdings: totalHoldings > 0 ? `$${totalHoldings.toFixed(2)}` : '$0.00',
       usdc: '$0.00', // Will be updated from BalanceBar
       pnl: totalPnL > 0 ? `$${totalPnL.toFixed(2)}` : totalPnL < 0 ? `-$${Math.abs(totalPnL).toFixed(2)}` : '$0.00',
-      volume: volume > 0 ? `$${volume.toFixed(2)}` : 'Loading...',
+      volume: volume > 0 ? `$${volume.toFixed(2)}` : 'N/A',
       marketsTraded: uniqueMarkets.toString(),
     };
-  }, [pnlData]);
+  }, [pnlData, isLoadingPnL, isSuccessPnL]);
 
   // Fetch USDC balance
   const { data: usdcBalance = '$0.00' } = useQuery({
@@ -151,7 +174,7 @@ export default function ProfilePage() {
     refetchInterval: 60000, // Refetch every minute
   });
 
-  const allTimePnL = accountMetrics.pnl;
+  const allTimePnL = accountMetrics.pnl === 'N/A' ? 'N/A' : accountMetrics.pnl;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -239,7 +262,9 @@ export default function ProfilePage() {
           </div>
           <div className="bg-card border border-border shadow-card hover:shadow-card-hover transition-all duration-300 p-3 sm:p-4">
             <div className="flex items-center gap-2 mb-1.5">
-              {parseFloat(accountMetrics.pnl.replace(/[$,]/g, '')) >= 0 ? (
+              {accountMetrics.pnl === 'N/A' ? (
+                <div className="h-3.5 w-3.5" />
+              ) : parseFloat(accountMetrics.pnl.replace(/[$,]/g, '')) >= 0 ? (
                 <TrendingUp className="h-3.5 w-3.5 text-status-success" />
               ) : (
                 <TrendingDown className="h-3.5 w-3.5 text-status-error" />
@@ -247,6 +272,7 @@ export default function ProfilePage() {
               <div className="text-xs text-muted-foreground">Total P&L</div>
             </div>
             <div className={`text-base sm:text-lg font-mono font-semibold ${
+              accountMetrics.pnl === 'N/A' ? 'text-muted-foreground' :
               parseFloat(accountMetrics.pnl.replace(/[$,]/g, '')) >= 0 ? 'text-status-success' : 'text-status-error'
             }`}>
               {accountMetrics.pnl}
@@ -284,6 +310,7 @@ export default function ProfilePage() {
               </div>
               <div className="text-xs sm:text-sm text-muted-foreground">
                 All Time: <span className={`font-mono font-semibold ${
+                  allTimePnL === 'N/A' ? 'text-muted-foreground' : 
                   parseFloat(allTimePnL.replace(/[$,]/g, '')) >= 0 ? 'text-status-success' : 'text-status-error'
                 }`}>{allTimePnL}</span>
               </div>
@@ -292,7 +319,14 @@ export default function ProfilePage() {
 
           {/* Chart Area */}
           <div className="h-64 sm:h-80">
-            {pnlData && pnlData.length > 0 ? (
+            {isLoadingPnL ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <div className="text-xs text-muted-foreground">Loading PnL chart...</div>
+                </div>
+              </div>
+            ) : isSuccessPnL && pnlData && pnlData.length > 0 ? (
               (() => {
                 // Convert PnL data to Lightweight Charts format
                 // Assuming pnlData has structure: [{ timestamp: number, pnl: number }]
@@ -320,8 +354,8 @@ export default function ProfilePage() {
             ) : (
               <div className="flex items-center justify-center h-full">
                 <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <div className="text-xs text-muted-foreground">Loading PnL chart...</div>
+                  <div className="text-sm text-muted-foreground">No activity detected</div>
+                  <div className="text-xs text-muted-foreground/70">PnL data will appear here once you start trading</div>
                 </div>
               </div>
             )}
@@ -356,41 +390,63 @@ export default function ProfilePage() {
           <div className="h-96 overflow-auto">
             {activeTab === 'positions' && (
               <div className="p-3 sm:p-4">
-                {pnlData && pnlData.length > 0 ? (
-                  <div className="space-y-2">
-                    {pnlData.filter((pos: any) => parseFloat(pos.currentValue || '0') > 0).map((pos: any) => (
-                      <div 
-                        key={pos.id} 
-                        className="p-3 bg-accent/20 border border-border hover:bg-accent/30 transition-colors"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-xs sm:text-sm font-semibold font-mono truncate max-w-[200px] sm:max-w-none">
-                            {pos.marketId.slice(0, 16)}...
-                          </div>
-                          <div className={`text-xs sm:text-sm font-mono font-semibold flex items-center gap-1 ${
-                            parseFloat(pos.unrealizedPnL || '0') >= 0 ? 'text-status-success' : 'text-status-error'
-                          }`}>
-                            {parseFloat(pos.unrealizedPnL || '0') >= 0 ? (
-                              <TrendingUp className="h-3 w-3" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3" />
-                            )}
-                            {parseFloat(pos.unrealizedPnL || '0') >= 0 ? '+' : ''}
-                            ${parseFloat(pos.unrealizedPnL || '0').toFixed(2)}
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>Outcome: {pos.outcome}</span>
-                          <span className="font-mono">Value: ${parseFloat(pos.currentValue || '0').toFixed(2)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
+                {isLoadingPnL ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="flex flex-col items-center gap-3">
                       <Loader2 className="h-6 w-6 animate-spin text-primary" />
                       <div className="text-xs text-muted-foreground">Loading positions...</div>
+                    </div>
+                  </div>
+                ) : isSuccessPnL && pnlData && pnlData.length > 0 ? (
+                  (() => {
+                    const activePositions = pnlData.filter((pos: any) => parseFloat(pos.currentValue || '0') > 0);
+                    if (activePositions.length === 0) {
+                      return (
+                        <div className="flex items-center justify-center h-full">
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="text-sm text-muted-foreground">No active positions</div>
+                            <div className="text-xs text-muted-foreground/70">Open positions will appear here</div>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="space-y-2">
+                        {activePositions.map((pos: any) => (
+                          <div 
+                            key={pos.id} 
+                            className="p-3 bg-accent/20 border border-border hover:bg-accent/30 transition-colors"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-xs sm:text-sm font-semibold font-mono truncate max-w-[200px] sm:max-w-none">
+                                {pos.marketId.slice(0, 16)}...
+                              </div>
+                              <div className={`text-xs sm:text-sm font-mono font-semibold flex items-center gap-1 ${
+                                parseFloat(pos.unrealizedPnL || '0') >= 0 ? 'text-status-success' : 'text-status-error'
+                              }`}>
+                                {parseFloat(pos.unrealizedPnL || '0') >= 0 ? (
+                                  <TrendingUp className="h-3 w-3" />
+                                ) : (
+                                  <TrendingDown className="h-3 w-3" />
+                                )}
+                                {parseFloat(pos.unrealizedPnL || '0') >= 0 ? '+' : ''}
+                                ${parseFloat(pos.unrealizedPnL || '0').toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>Outcome: {pos.outcome}</span>
+                              <span className="font-mono">Value: ${parseFloat(pos.currentValue || '0').toFixed(2)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="text-sm text-muted-foreground">No activity detected</div>
+                      <div className="text-xs text-muted-foreground/70">Positions will appear here once you start trading</div>
                     </div>
                   </div>
                 )}

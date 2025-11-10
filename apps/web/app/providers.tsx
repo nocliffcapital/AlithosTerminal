@@ -18,27 +18,44 @@ function RealtimeConnectionProvider({ children }: { children: React.ReactNode })
     const originalError = console.error;
     const originalWarn = console.warn;
     
-    // Suppress MetaMask provider conflict errors
+    // Suppress MetaMask provider conflict errors and other harmless extension errors
     const errorHandler = (...args: any[]) => {
       try {
-        // Check if this is a MetaMask provider conflict error
-        const firstArg = args[0];
-        let message = '';
+        // Convert all arguments to strings and check them
+        const allMessages = args.map(arg => {
+          if (typeof arg === 'string') return arg;
+          if (arg instanceof Error) return arg.message;
+          if (arg?.toString) return arg.toString();
+          return String(arg);
+        }).join(' ');
         
-        if (typeof firstArg === 'string') {
-          message = firstArg;
-        } else if (firstArg instanceof Error) {
-          message = firstArg.message;
-        } else if (firstArg?.toString) {
-          message = firstArg.toString();
-        }
-        
-        // Only suppress specific MetaMask errors
+        // Suppress MetaMask provider conflict errors (harmless when multiple wallet extensions are installed)
+        // These errors occur when multiple wallet extensions try to set window.ethereum
         if (
-          message.includes('MetaMask encountered an error setting the global Ethereum provider') ||
-          (message.includes('Cannot set property ethereum') && message.includes('which has only a getter'))
+          allMessages.includes('MetaMask encountered an error setting the global Ethereum provider') ||
+          (allMessages.includes('Cannot set property ethereum') && allMessages.includes('which has only a getter')) ||
+          (allMessages.includes('ethereum') && allMessages.includes('getter') && allMessages.includes('TypeError'))
         ) {
           // Suppress this specific error - it's harmless when multiple wallet extensions are installed
+          return;
+        }
+        
+        // Suppress CORS errors from Privy analytics (expected in development)
+        if (
+          allMessages.includes('auth.privy.io') &&
+          allMessages.includes('CORS') &&
+          allMessages.includes('analytics_events')
+        ) {
+          // Suppress Privy analytics CORS errors - expected in development
+          return;
+        }
+        
+        // Suppress CSP report errors (blocked by ad blockers, harmless)
+        if (
+          allMessages.includes('csp-report') ||
+          allMessages.includes('ERR_BLOCKED_BY_CLIENT')
+        ) {
+          // Suppress CSP report errors - blocked by ad blockers, harmless
           return;
         }
         

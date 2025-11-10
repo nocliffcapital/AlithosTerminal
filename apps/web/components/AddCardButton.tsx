@@ -49,7 +49,6 @@ export function AddCardButton() {
     'Research',
     'Risk Management',
     'Automation',
-    'Team',
     'Utilities',
   ];
 
@@ -102,7 +101,9 @@ export function AddCardButton() {
           
           {/* Categories */}
           {categoryOrder.map((category, categoryIndex) => {
-            const cards = cardCategories[category].filter(({ type }) => !isFavouriteCardType(type));
+            const categoryCards = cardCategories[category];
+            if (!categoryCards) return null;
+            const cards = categoryCards.filter(({ type }) => !isFavouriteCardType(type));
             if (cards.length === 0) return null;
             
             return (

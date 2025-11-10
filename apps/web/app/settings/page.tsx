@@ -2,20 +2,22 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Palette, Bell, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, Palette, Bell, Settings as SettingsIcon, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeEditor } from '@/components/settings/ThemeEditor';
 import { AlertsManager } from '@/components/settings/AlertsManager';
 import { NotificationPreferences } from '@/components/settings/NotificationPreferences';
+import { TeamManagement } from '@/components/settings/TeamManagement';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'theme' | 'alerts' | 'notifications'>('theme');
+  const [activeTab, setActiveTab] = useState<'theme' | 'alerts' | 'notifications' | 'teams'>('theme');
 
   const tabs = [
-    { id: 'theme' as const, label: 'Theme Editor', icon: Palette },
     { id: 'alerts' as const, label: 'Alerts & Automation', icon: Bell },
     { id: 'notifications' as const, label: 'Notifications', icon: SettingsIcon },
+    { id: 'teams' as const, label: 'Team Management', icon: Users },
+    { id: 'theme' as const, label: 'Theme Editor', icon: Palette },
   ];
 
   return (
@@ -35,7 +37,7 @@ export default function SettingsPage() {
           <div className="flex-1">
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Settings</h1>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Manage your theme, alerts, and notification preferences
+              Manage your theme, alerts, notifications, and teams
             </p>
           </div>
         </div>
@@ -71,6 +73,7 @@ export default function SettingsPage() {
           {activeTab === 'theme' && <ThemeEditor />}
           {activeTab === 'alerts' && <AlertsManager />}
           {activeTab === 'notifications' && <NotificationPreferences />}
+          {activeTab === 'teams' && <TeamManagement />}
         </div>
       </div>
     </div>
