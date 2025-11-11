@@ -12,6 +12,7 @@ interface EmptyStateProps {
   action?: {
     label: string;
     onClick: () => void;
+    icon?: LucideIcon;
   };
   className?: string;
 }
@@ -35,6 +36,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
           onClick={action.onClick}
           className="mt-2 text-xs"
         >
+          {action.icon && <action.icon className="h-4 w-4 mr-2" />}
           {action.label}
         </Button>
       )}

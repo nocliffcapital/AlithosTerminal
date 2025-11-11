@@ -23,6 +23,7 @@ import { Zap, Settings2, Play, Shield } from 'lucide-react';
 import { RiskWarning } from '@/components/ui/RiskWarning';
 import { useToast } from '@/components/Toast';
 import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 function QuickTicketCardComponent() {
   const { selectedMarketId, getMarket } = useMarketStore();
@@ -250,19 +251,16 @@ function QuickTicketCardComponent() {
   if (!selectedMarketId) {
     return (
       <>
-        <div className="flex flex-col items-center justify-center h-full gap-4 p-4 text-center">
-          <div className="text-muted-foreground text-sm mb-2">
-            Select a market for quick trading
-          </div>
-          <Button
-            onClick={handleShowMarketSelector}
-            variant="outline"
-            size="sm"
-          >
-            <Search className="h-4 w-4 mr-2" />
-            Select Market
-          </Button>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="Select a market for quick trading"
+          action={{
+            label: 'Select Market',
+            onClick: handleShowMarketSelector,
+            icon: Search,
+          }}
+          className="p-4"
+        />
         <MarketSelector
           open={showMarketSelector}
           onOpenChange={handleCloseMarketSelector}

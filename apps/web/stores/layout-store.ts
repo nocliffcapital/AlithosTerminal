@@ -126,11 +126,11 @@ interface LayoutState {
 
 const defaultCardLayout = (index: number): Layout => ({
   i: `card-${index}`,
-  x: (index % 3) * 4,
+  x: (index % 3) * 8,
   y: Math.floor(index / 3) * 6,
-  w: 4,
+  w: 8,
   h: 6,
-  minW: 2,
+  minW: 4,
   minH: 3,
 });
 
@@ -363,17 +363,17 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           {
             id: 'watchlist-1',
             type: 'watchlist',
-            layout: { i: 'watchlist-1', x: 0, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+            layout: { i: 'watchlist-1', x: 0, y: 0, w: 8, h: 6, minW: 4, minH: 3 },
           },
           {
             id: 'tape-1',
             type: 'tape',
-            layout: { i: 'tape-1', x: 4, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+            layout: { i: 'tape-1', x: 8, y: 0, w: 8, h: 6, minW: 4, minH: 3 },
           },
           {
             id: 'quick-ticket-1',
             type: 'quick-ticket',
-            layout: { i: 'quick-ticket-1', x: 8, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+            layout: { i: 'quick-ticket-1', x: 16, y: 0, w: 8, h: 6, minW: 4, minH: 3 },
           },
         ];
         
@@ -445,12 +445,12 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
           {
             id: 'watchlist-1',
             type: 'watchlist',
-            layout: { i: 'watchlist-1', x: 0, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+            layout: { i: 'watchlist-1', x: 0, y: 0, w: 8, h: 6, minW: 4, minH: 3 },
           },
           {
             id: 'tape-1',
             type: 'tape',
-            layout: { i: 'tape-1', x: 4, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+            layout: { i: 'tape-1', x: 8, y: 0, w: 8, h: 6, minW: 4, minH: 3 },
           },
         ];
         
@@ -763,8 +763,8 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
             // Preserve layout dimensions when restoring - ensure they're not too small
             const preservedLayout = { ...c.layout };
             // If layout dimensions are suspiciously small, restore to defaults
-            if (preservedLayout.w < 2 || preservedLayout.h < 3) {
-              preservedLayout.w = 4;
+            if (preservedLayout.w < 4 || preservedLayout.h < 3) {
+              preservedLayout.w = 8;
               preservedLayout.h = 6;
             }
             return { ...c, isMinimized: false, isMaximized: false, layout: preservedLayout };

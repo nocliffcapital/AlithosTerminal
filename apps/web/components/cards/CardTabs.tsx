@@ -67,7 +67,7 @@ export function CardTabs({
   }
 
   return (
-    <div className="flex items-center gap-0.5 border-b border-border bg-accent/5 px-1 overflow-hidden">
+    <div className="flex items-center gap-0.5 border-b border-border bg-accent/5 px-0.5 overflow-hidden">
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
         const isDragged = tab.id === draggedTabId;
@@ -204,7 +204,7 @@ function TabLabel({
       onDragLeave={onDragLeave}
       onClick={onClick}
       className={cn(
-        'flex items-center gap-1 px-1 py-1.5 text-xs font-medium cursor-pointer transition-colors relative group',
+        'flex items-center gap-1 px-0.5 py-1 text-xs font-medium cursor-pointer transition-colors relative group',
         'min-w-0 flex-shrink flex-1',
         'max-w-[200px] min-w-[60px]',
         isActive

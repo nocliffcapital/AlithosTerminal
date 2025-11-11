@@ -159,7 +159,7 @@ export function BalanceBar() {
   };
 
   return (
-    <div className="flex items-center border border-border bg-card overflow-hidden h-9 shadow-sm hover:shadow-md transition-shadow duration-200">
+    <div className="flex items-center border border-border bg-card overflow-hidden h-8 shadow-sm hover:shadow-md transition-shadow duration-200">
       {isLoading ? (
         <div className="flex items-center justify-center px-4 w-full h-full">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
@@ -167,20 +167,20 @@ export function BalanceBar() {
       ) : (
         <>
           {/* POL Section */}
-          <div className="flex items-center gap-2.5 px-3.5 h-full flex-1 min-w-0 hover:bg-accent/10 transition-colors duration-150 cursor-default">
+          <div className="flex items-center gap-2 px-3 h-full flex-1 min-w-0 hover:bg-accent/10 transition-colors duration-150 cursor-default">
             <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center overflow-hidden rounded-full">
               <POLLogo className="w-3.5 h-3.5" />
             </div>
             <div className="flex flex-col justify-center min-w-0">
               <span className="text-[8px] font-medium text-muted-foreground leading-tight uppercase tracking-wide">POL</span>
               {balances.pol ? (
-                <span className="text-xs font-semibold leading-tight truncate">
+                <span className="text-[10px] font-semibold leading-tight truncate">
                   {formatBalance(balances.pol.balance)}
                 </span>
               ) : (
                 <div className="flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Loading...</span>
+                  <Loader2 className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
+                  <span className="text-[10px] text-muted-foreground">Loading...</span>
                 </div>
               )}
             </div>
@@ -190,20 +190,20 @@ export function BalanceBar() {
           <div className="w-px h-full bg-border/50 flex-shrink-0" />
 
           {/* USDC Section */}
-          <div className="flex items-center gap-2.5 px-3.5 h-full flex-1 min-w-0 hover:bg-accent/10 transition-colors duration-150 cursor-default">
+          <div className="flex items-center gap-2 px-3 h-full flex-1 min-w-0 hover:bg-accent/10 transition-colors duration-150 cursor-default">
             <div className="flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center overflow-hidden rounded-full">
               <USDCLogo className="w-3.5 h-3.5" />
             </div>
             <div className="flex flex-col justify-center min-w-0">
               <span className="text-[8px] font-medium text-muted-foreground leading-tight uppercase tracking-wide">USDC</span>
               {balances.usdc ? (
-                <span className="text-xs font-semibold leading-tight truncate">
+                <span className="text-[10px] font-semibold leading-tight truncate">
                   {formatBalance(balances.usdc.balance)}
                 </span>
               ) : (
                 <div className="flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Loading...</span>
+                  <Loader2 className="h-2.5 w-2.5 animate-spin text-muted-foreground" />
+                  <span className="text-[10px] text-muted-foreground">Loading...</span>
                 </div>
               )}
             </div>

@@ -933,10 +933,15 @@ export default function DocsPage() {
                     )}
                     {card.type === 'activity-scanner' && (
                       <ul className="space-y-1 text-muted-foreground text-sm">
-                        <li>• Unusual activity detection</li>
-                        <li>• Volume spike identification</li>
-                        <li>• Flow imbalance alerts</li>
-                        <li>• Market opportunity scanning</li>
+                        <li>• Real-time unusual activity detection</li>
+                        <li>• Volume spike and flow imbalance identification</li>
+                        <li>• Price volatility and breakout detection</li>
+                        <li>• Liquidity and spread anomaly alerts</li>
+                        <li>• Whale trade and wallet concentration detection</li>
+                        <li>• Severity and type filtering</li>
+                        <li>• Relative time display (e.g., "27s ago", "3m ago")</li>
+                        <li>• Click-to-focus: Click any anomaly to view details</li>
+                        <li>• Market heat score visualization</li>
                       </ul>
                     )}
                   </div>
@@ -1210,13 +1215,107 @@ export default function DocsPage() {
           <h2 className="text-3xl font-bold mb-6 text-foreground">
             Alerts & Automation
           </h2>
+          
+          {/* Anomaly Detection System */}
+          <div className="bg-card border border-border rounded-lg p-6 mb-6">
+            <h3 className="text-xl font-semibold mb-4 text-foreground">Anomaly Detection System</h3>
+            <p className="text-muted-foreground mb-6">
+              The Anomaly Detection System uses advanced algorithms to identify unusual market activity in real-time, 
+              helping you spot opportunities and risks before they become obvious. The system includes three main components 
+              that work together to provide comprehensive market intelligence.
+            </p>
+            
+            <div className="space-y-6">
+              <div>
+                <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Activity Scanner Card
+                </h4>
+                <p className="text-muted-foreground mb-3 text-sm">
+                  The Activity Scanner provides per-market anomaly detection with real-time updates. It shows all detected 
+                  anomalies for the selected market, sorted by severity and timestamp.
+                </p>
+                <ul className="space-y-2 text-muted-foreground text-sm ml-7">
+                  <li>• <strong>Real-time Detection:</strong> Continuously monitors trades and order book data</li>
+                  <li>• <strong>Anomaly Types:</strong> Detects volume spikes, flow imbalances, price jumps, volatility spikes, 
+                      breakouts, spread changes, depth changes, whale trades, wallet concentration, and more</li>
+                  <li>• <strong>Severity Levels:</strong> Anomalies are classified as Calm, Mild, Hot, or On-Fire based on 
+                      statistical significance</li>
+                  <li>• <strong>Filtering:</strong> Filter by severity (All, Medium+, High+, Extreme) and type (Volume/Flow, 
+                      Price/Vol, Liquidity, Participants)</li>
+                  <li>• <strong>Relative Time:</strong> Shows "27s ago", "3m ago" for recent events, falls back to formatted 
+                      time for older events</li>
+                  <li>• <strong>Click-to-Focus:</strong> Click any anomaly row to open detailed information in the Anomaly 
+                      Detail Flyout</li>
+                  <li>• <strong>Heat Score:</strong> Displays market heat score with color-coded severity bands</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Global Heat Scanner Card
+                </h4>
+                <p className="text-muted-foreground mb-3 text-sm">
+                  The Global Heat Scanner provides a market-wide overview, showing all markets ranked by their anomaly heat 
+                  scores. This helps you quickly identify which markets are experiencing unusual activity across the entire 
+                  platform.
+                </p>
+                <ul className="space-y-2 text-muted-foreground text-sm ml-7">
+                  <li>• <strong>Market Heat Scores:</strong> Each market receives a heat score (0-100) based on detected anomalies</li>
+                  <li>• <strong>Sorting Options:</strong> Sort by Heat Score (descending), Category, or Alphabetical</li>
+                  <li>• <strong>Filtering:</strong> Filter by market category and minimum heat band (Calm, Mild, Hot, On-Fire)</li>
+                  <li>• <strong>Visual Indicators:</strong> Color-coded severity labels and heat score displays</li>
+                  <li>• <strong>Anomaly Categories:</strong> Shows tags for top contributing anomaly types (Volume, Price, 
+                      Liquidity, etc.)</li>
+                  <li>• <strong>Quick Navigation:</strong> Click any market row to select it and view details in other cards</li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Anomaly Detail Flyout
+                </h4>
+                <p className="text-muted-foreground mb-3 text-sm">
+                  The Anomaly Detail Flyout provides comprehensive context when you click on an anomaly. It opens as a side 
+                  panel with detailed information, charts, and related anomalies for deep analysis.
+                </p>
+                <ul className="space-y-2 text-muted-foreground text-sm ml-7">
+                  <li>• <strong>Header Information:</strong> Anomaly icon, label, market question, and severity badge</li>
+                  <li>• <strong>Summary:</strong> Full anomaly message with context</li>
+                  <li>• <strong>Key Statistics:</strong> Displays relevant metrics like Z-Score, Price Change, Volume, 
+                      Average Volume, Imbalance Percentage, and Trade Size in organized cards</li>
+                  <li>• <strong>Wallet Address:</strong> If available, shows wallet address with one-click copy functionality</li>
+                  <li>• <strong>Price Chart:</strong> Interactive mini-chart showing price movement around the anomaly timestamp 
+                      (±30 minutes)</li>
+                  <li>• <strong>Anomaly Timeline:</strong> Shows other recent anomalies for the same market to provide context 
+                      and identify patterns</li>
+                  <li>• <strong>Actions:</strong> Close button to dismiss the flyout</li>
+                </ul>
+              </div>
+
+              <div className="bg-muted/50 rounded-lg p-4 border border-border/50">
+                <h5 className="font-semibold text-foreground mb-2 text-sm">How It Works Together</h5>
+                <p className="text-muted-foreground text-sm">
+                  Use the <strong>Global Heat Scanner</strong> to identify markets with unusual activity, then add an 
+                  <strong> Activity Scanner</strong> card to monitor specific markets in detail. When an anomaly catches your 
+                  attention, click it to open the <strong>Anomaly Detail Flyout</strong> for comprehensive analysis. This 
+                  workflow helps you quickly identify opportunities and risks across the entire market.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Traditional Alert System */}
           <div className="bg-card border border-border rounded-lg p-6">
+            <h3 className="text-xl font-semibold mb-4 text-foreground">Custom Alert System</h3>
             <p className="text-muted-foreground mb-6">
               The alert system allows you to set up automated notifications and actions based on market conditions.
             </p>
             <div className="space-y-6">
               <div>
-                <h3 className="text-xl font-semibold mb-3 text-foreground">Alert Conditions</h3>
+                <h4 className="font-semibold text-foreground mb-3">Alert Conditions</h4>
                 <ul className="space-y-2 text-muted-foreground text-sm">
                   <li>• <strong>Price:</strong> Alert when price crosses threshold (gt, lt, gte, lte, eq)</li>
                   <li>• <strong>Volume:</strong> Alert on volume spikes or unusual activity</li>
@@ -1226,7 +1325,7 @@ export default function DocsPage() {
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold mb-3 text-foreground">Alert Actions</h3>
+                <h4 className="font-semibold text-foreground mb-3">Alert Actions</h4>
                 <ul className="space-y-2 text-muted-foreground text-sm">
                   <li>• <strong>Notify:</strong> Browser notifications, email, or Telegram</li>
                   <li>• <strong>Order:</strong> Automatically place buy/sell orders</li>
@@ -1234,7 +1333,7 @@ export default function DocsPage() {
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-semibold mb-3 text-foreground">Alert Features</h3>
+                <h4 className="font-semibold text-foreground mb-3">Alert Features</h4>
                 <ul className="space-y-2 text-muted-foreground text-sm">
                   <li>• Multi-signal alerts (combine multiple conditions)</li>
                   <li>• Cooldown periods to prevent alert spam</li>

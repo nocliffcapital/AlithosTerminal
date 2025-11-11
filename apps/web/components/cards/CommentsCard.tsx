@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useMarket, useMarkets } from '@/lib/hooks/usePolymarketData';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePrivy } from '@privy-io/react-auth';
-import { Loader2, Plus, Trash2, MessageSquare, Send } from 'lucide-react';
+import { Loader2, Plus, Trash2, MessageSquare, Send, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -599,6 +599,7 @@ function CommentsCardComponent({ marketId: propMarketId, onMarketChange }: Comme
           action={{
             label: 'Select Market',
             onClick: () => setShowMarketSelector(true),
+            icon: Search,
           }}
           className="p-4"
         />

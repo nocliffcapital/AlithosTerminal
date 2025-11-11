@@ -209,8 +209,13 @@ export function convertHistoricalPricesToLightweight(
 ): LightweightChartDataPoint[] {
   return prices
     .map((price) => {
+      // Ensure we have a valid price object
+      if (!price || typeof price !== 'object') {
+        return null;
+      }
+      
       // Ensure we have a valid timestamp
-      if (!price.timestamp || isNaN(price.timestamp)) {
+      if (price.timestamp == null || isNaN(price.timestamp) || !isFinite(price.timestamp)) {
         return null;
       }
       
@@ -231,12 +236,32 @@ export function convertHistoricalPricesToLightweight(
       // This ensures we never show values outside the valid probability range
       value = Math.max(0, Math.min(100, value));
       
+      // Ensure value is finite after clamping
+      if (!isFinite(value)) {
+        return null;
+      }
+      
+      // Convert timestamp and validate
+      const time = timestampToUnixSeconds(price.timestamp);
+      const timeNumber = Number(time);
+      
+      // Validate time is a valid number
+      if (isNaN(timeNumber) || !isFinite(timeNumber)) {
+        return null;
+      }
+      
       return {
-        time: timestampToUnixSeconds(price.timestamp),
+        time,
         value,
       };
     })
-    .filter((point): point is LightweightChartDataPoint => point !== null);
+    .filter((point): point is LightweightChartDataPoint => {
+      // Final validation - ensure point is not null and has valid time and value
+      if (!point) return false;
+      const time = Number(point.time);
+      const value = Number(point.value);
+      return !isNaN(time) && !isNaN(value) && isFinite(time) && isFinite(value);
+    });
 }
 
 /**

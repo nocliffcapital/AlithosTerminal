@@ -257,11 +257,16 @@ export function LightweightChartCard({
 
       if (!seriesInstance) {
         try {
+          // Validate color before creating series
+          const seriesColor = seriesData.color && typeof seriesData.color === 'string' && seriesData.color.trim() !== ''
+            ? seriesData.color
+            : chartColors.yes; // Fallback to default color
+          
           // Create new series - use addSeries with LineSeries class
           // In v5, addSeries takes the series type class as first param
           seriesInstance = chartRef.current!.addSeries(LineSeries, {
             ...lineSeriesOptions,
-            color: seriesData.color,
+            color: seriesColor,
           }) as ISeriesApi<'Line'>;
           if (seriesInstance) {
             seriesRefs.current.set(seriesData.label, seriesInstance);
@@ -286,22 +291,57 @@ export function LightweightChartCard({
       // Update series data
       try {
         if (seriesData.data.length > 0 && seriesInstance) {
+          // Filter out invalid data points first (null, undefined, or invalid values)
+          const validData = seriesData.data.filter((point) => {
+            if (!point || point.time == null || point.value == null) {
+              return false;
+            }
+            const time = Number(point.time);
+            const value = Number(point.value);
+            // Ensure time and value are valid numbers
+            if (isNaN(time) || isNaN(value) || !isFinite(time) || !isFinite(value)) {
+              return false;
+            }
+            return true;
+          });
+          
+          if (validData.length === 0) {
+            // No valid data, set empty array
+            seriesInstance.setData([]);
+            return;
+          }
+          
           // Sort data by time to ensure proper rendering
-          const sortedData = [...seriesData.data].sort((a, b) => Number(a.time) - Number(b.time));
+          const sortedData = [...validData].sort((a, b) => Number(a.time) - Number(b.time));
           
           // Remove duplicate timestamps - keep the last value for each timestamp
           const seenTimes = new Map<number, LightweightChartDataPoint>();
           
           for (const point of sortedData) {
             const time = Number(point.time);
-            // Keep the last occurrence of each timestamp
-            seenTimes.set(time, point);
+            const value = Number(point.value);
+            // Double-check validity before adding
+            if (!isNaN(time) && !isNaN(value) && isFinite(time) && isFinite(value)) {
+              // Keep the last occurrence of each timestamp
+              seenTimes.set(time, point);
+            }
           }
           
           // Convert map back to array and sort again (in case map iteration order differs)
-          const finalData = Array.from(seenTimes.values()).sort((a, b) => Number(a.time) - Number(b.time));
+          const finalData = Array.from(seenTimes.values())
+            .filter((point) => {
+              // Final validation pass
+              const time = Number(point.time);
+              const value = Number(point.value);
+              return !isNaN(time) && !isNaN(value) && isFinite(time) && isFinite(value);
+            })
+            .sort((a, b) => Number(a.time) - Number(b.time));
           
-          seriesInstance.setData(finalData);
+          if (finalData.length > 0) {
+            seriesInstance.setData(finalData);
+          } else {
+            seriesInstance.setData([]);
+          }
         } else {
           if (seriesInstance) {
             seriesInstance.setData([]);

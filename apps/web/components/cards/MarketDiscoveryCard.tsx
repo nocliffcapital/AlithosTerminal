@@ -123,7 +123,7 @@ const SORT_OPTIONS = [
 function MarketDiscoveryCardComponent() {
   const { selectMarket, selectedMarketId } = useMarketStore();
   const { marketIds: watchlistIds, addToWatchlist, removeFromWatchlist, isInWatchlist, addEventToWatchlist, removeEventFromWatchlist, isEventInWatchlist, getEventIds } = useWatchlistStore();
-  const { addCard, favouriteCardTypes, toggleFavouriteCardType, isFavouriteCardType } = useLayoutStore();
+  const { addCard, createLinkGroup, favouriteCardTypes, toggleFavouriteCardType, isFavouriteCardType } = useLayoutStore();
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('volume');
   const [searchQuery, setSearchQuery] = useState('');
@@ -880,11 +880,16 @@ function MarketDiscoveryCardComponent() {
   const handleConfirmCardSelection = () => {
     if (selectedCardTypes.size === 0 || cardSelectorMarketIds.length === 0) return;
 
+    // Collect all card IDs that will be created
+    const createdCardIds: string[] = [];
+
     selectedCardTypes.forEach((cardType) => {
       if (cardType === 'chart') {
         // For chart cards, use marketIds if multiple markets, marketId if single
+        const cardId = `${cardType}-${Date.now()}-${Math.random()}`;
+        createdCardIds.push(cardId);
         addCard({
-          id: `${cardType}-${Date.now()}-${Math.random()}`,
+          id: cardId,
           type: cardType as any,
           props: cardSelectorMarketIds.length > 1 
             ? { marketIds: cardSelectorMarketIds }
@@ -893,14 +898,21 @@ function MarketDiscoveryCardComponent() {
       } else {
         // For other cards, add one card per market
         cardSelectorMarketIds.forEach((marketId) => {
+          const cardId = `${cardType}-${Date.now()}-${Math.random()}`;
+          createdCardIds.push(cardId);
           addCard({
-            id: `${cardType}-${Date.now()}-${Math.random()}`,
+            id: cardId,
             type: cardType as any,
             props: { marketId },
           });
         });
       }
     });
+
+    // If multiple cards were created, automatically link them with the next available color
+    if (createdCardIds.length > 1) {
+      createLinkGroup(createdCardIds);
+    }
 
     setShowCardSelector(false);
     setSelectedCardTypes(new Set());

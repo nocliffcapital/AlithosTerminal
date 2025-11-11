@@ -453,6 +453,11 @@ export function WorkspaceTabs() {
 
   const handleDoubleClick = (e: React.MouseEvent, workspaceId: string, currentName: string) => {
     e.stopPropagation();
+    // Prevent editing TRADING workspaces
+    const workspace = workspaces.find((w: any) => w.id === workspaceId);
+    if (workspace?.type === 'TRADING') {
+      return;
+    }
     setEditingTabId(workspaceId);
     setEditingName(currentName);
   };
@@ -675,14 +680,21 @@ export function WorkspaceTabs() {
                 ) : (
                   <span 
                     className="text-xs whitespace-nowrap truncate flex-1 min-w-0 text-left flex items-center gap-1.5"
-                    onDoubleClick={(e) => handleDoubleClick(e, workspace.id, workspace.name)}
+                    onDoubleClick={(e) => {
+                      // Prevent editing TRADING workspaces
+                      if (workspace.type !== 'TRADING') {
+                        handleDoubleClick(e, workspace.id, workspace.name);
+                      }
+                    }}
                   >
                     {workspace.type === 'TRADING' ? (
                       <LineChart className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                     ) : (
                       <LayoutGrid className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                     )}
-                    <span className={isActive ? 'font-semibold' : 'font-normal'}>{workspace.name}</span>
+                    <span className={isActive ? 'font-semibold' : 'font-normal'}>
+                      {workspace.type === 'TRADING' ? 'Trading' : workspace.name}
+                    </span>
                   </span>
                 )}
                 {canRemoveTab && workspace.type !== 'TRADING' && (
@@ -702,15 +714,17 @@ export function WorkspaceTabs() {
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-56">
-                  <ContextMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDoubleClick(e as any, workspace.id, workspace.name);
-                    }}
-                    className="cursor-pointer"
-                  >
-                    Rename
-                  </ContextMenuItem>
+                  {workspace.type !== 'TRADING' && (
+                    <ContextMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDoubleClick(e as any, workspace.id, workspace.name);
+                      }}
+                      className="cursor-pointer"
+                    >
+                      Rename
+                    </ContextMenuItem>
+                  )}
                 </ContextMenuContent>
               </ContextMenu>
             );

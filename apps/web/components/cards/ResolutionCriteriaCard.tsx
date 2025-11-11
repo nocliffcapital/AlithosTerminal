@@ -65,6 +65,7 @@ function ResolutionCriteriaCardComponent({ marketId: propMarketId, onMarketChang
           action={{
             label: 'Select Market',
             onClick: () => setShowMarketSelector(true),
+            icon: Search,
           }}
           className="p-4"
         />

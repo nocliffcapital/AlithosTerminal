@@ -163,6 +163,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
           action={{
             label: 'Select Market',
             onClick: () => setShowMarketSelector(true),
+            icon: Search,
           }}
           className="p-4"
         />

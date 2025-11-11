@@ -236,6 +236,7 @@ function TapeCardComponent() {
           action={{
             label: 'Select Market',
             onClick: handleShowMarketSelector,
+            icon: Search,
           }}
           className="p-4"
         />

@@ -68,6 +68,9 @@ export function TradingOrderForms({ marketId }: TradingOrderFormsProps) {
   const [slPrice, setSlPrice] = useState<string>('');
   const [slLoss, setSlLoss] = useState<string>('');
   
+  // Image error handling
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+  
   // Settings dialogs
   const [showGasSettings, setShowGasSettings] = useState(false);
   const [showSlippageSettings, setShowSlippageSettings] = useState(false);
@@ -387,6 +390,29 @@ export function TradingOrderForms({ marketId }: TradingOrderFormsProps) {
 
         {activeTab === 'market' && (
           <div className="space-y-2">
+            {/* Market Display */}
+            {market && (
+              <div className="flex items-center gap-2 px-1.5 py-1.5 bg-background/30 rounded border border-border/50">
+                {market.imageUrl && !imageErrors.has(market.id) && (
+                  <div className="flex-shrink-0 w-5 h-5 overflow-hidden border border-border bg-accent/20 rounded">
+                    <img
+                      src={market.imageUrl}
+                      alt={market.question || 'Market'}
+                      className="w-full h-full object-cover"
+                      onError={() => {
+                        setImageErrors(prev => new Set([...prev, market.id]));
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-medium text-foreground truncate leading-tight">
+                    {market.question || 'Market'}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Outcome Selection */}
             <div>
               <div className="text-xs text-muted-foreground mb-1">Outcome</div>
@@ -684,6 +710,29 @@ export function TradingOrderForms({ marketId }: TradingOrderFormsProps) {
 
         {activeTab === 'limit' && (
           <div className="space-y-2">
+            {/* Market Display */}
+            {market && (
+              <div className="flex items-center gap-2 px-1.5 py-1.5 bg-background/30 rounded border border-border/50">
+                {market.imageUrl && !imageErrors.has(market.id) && (
+                  <div className="flex-shrink-0 w-5 h-5 overflow-hidden border border-border bg-accent/20 rounded">
+                    <img
+                      src={market.imageUrl}
+                      alt={market.question || 'Market'}
+                      className="w-full h-full object-cover"
+                      onError={() => {
+                        setImageErrors(prev => new Set([...prev, market.id]));
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-medium text-foreground truncate leading-tight">
+                    {market.question || 'Market'}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Outcome Selection */}
             <div>
               <div className="text-xs text-muted-foreground mb-1">Outcome</div>
@@ -987,6 +1036,29 @@ export function TradingOrderForms({ marketId }: TradingOrderFormsProps) {
 
         {activeTab === 'advanced' && (
           <div className="space-y-2">
+            {/* Market Display */}
+            {market && (
+              <div className="flex items-center gap-2 px-1.5 py-1.5 bg-background/30 rounded border border-border/50">
+                {market.imageUrl && !imageErrors.has(market.id) && (
+                  <div className="flex-shrink-0 w-5 h-5 overflow-hidden border border-border bg-accent/20 rounded">
+                    <img
+                      src={market.imageUrl}
+                      alt={market.question || 'Market'}
+                      className="w-full h-full object-cover"
+                      onError={() => {
+                        setImageErrors(prev => new Set([...prev, market.id]));
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[10px] font-medium text-foreground truncate leading-tight">
+                    {market.question || 'Market'}
+                  </div>
+                </div>
+              </div>
+            )}
+            
             {/* Outcome Selection */}
             <div>
               <div className="text-xs text-muted-foreground mb-1">Outcome</div>

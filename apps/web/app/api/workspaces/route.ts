@@ -157,10 +157,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Create workspace
+    // Force name to "Trading" for TRADING workspaces
+    const workspaceName = workspaceType === 'TRADING' ? 'Trading' : name;
     const workspace = await prisma.workspace.create({
       data: {
         userId,
-        name,
+        name: workspaceName,
         type: workspaceType,
         isDefault: workspaceType === 'TRADING', // Auto-set isDefault for TRADING workspaces
       },

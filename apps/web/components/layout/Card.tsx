@@ -243,10 +243,10 @@ function CardHeader({
   return (
     <>
       <div className={cn(
-        "card-handle flex items-center justify-between px-4 py-1.5 border-b border-border bg-accent/20 hover:bg-accent/30 transition-colors duration-200",
+        "card-handle flex items-center justify-between px-2 py-1 border-b border-border bg-accent/20 hover:bg-accent/30 transition-colors duration-200",
         card.isMaximized ? "cursor-default" : "cursor-move"
       )}>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <h3 className="text-xs font-semibold tracking-tight capitalize flex-shrink-0">
             {card.type === 'tradingview-chart' ? 'TradingView Chart' : card.type.replace(/-/g, ' ')}
           </h3>
@@ -365,7 +365,7 @@ function CardHeader({
           }}
           className={cn(
             "hover:bg-accent/60 transition-all duration-150 active:scale-95",
-            card.isMaximized ? "p-2.5" : "p-1.5",
+            card.isMaximized ? "p-2" : "p-1",
             linkGroup && "text-primary"
           )}
           title={linkGroup ? "Manage links" : "Link cards"}
@@ -386,7 +386,7 @@ function CardHeader({
             }}
             className={cn(
               "hover:bg-accent/60 transition-all duration-150 active:scale-95",
-              card.isMaximized ? "p-2.5" : "p-1.5"
+              card.isMaximized ? "p-2" : "p-1"
             )}
             title="Settings"
             aria-label="Settings"
@@ -401,7 +401,7 @@ function CardHeader({
               e.stopPropagation();
               restoreCard(card.id);
             }}
-            className="p-2.5 hover:bg-accent/60 transition-all duration-150 active:scale-95"
+            className="p-2 hover:bg-accent/60 transition-all duration-150 active:scale-95"
             title="Restore"
             aria-label="Restore card"
             onMouseDown={(e) => e.stopPropagation()}
@@ -414,7 +414,7 @@ function CardHeader({
               e.stopPropagation();
               maximizeCard(card.id);
             }}
-            className="p-1.5 hover:bg-accent/60 transition-all duration-150 active:scale-95"
+            className="p-1 hover:bg-accent/60 transition-all duration-150 active:scale-95"
             title="Maximize"
             aria-label="Maximize card"
             onMouseDown={(e) => e.stopPropagation()}
@@ -431,7 +431,7 @@ function CardHeader({
             }}
             className={cn(
               "hover:bg-destructive/30 hover:text-destructive transition-all duration-150 active:scale-95",
-              card.isMaximized ? "p-2.5" : "p-1.5"
+              card.isMaximized ? "p-2" : "p-1"
             )}
             title="Remove"
             aria-label="Remove card"
@@ -735,7 +735,7 @@ export const Card = React.memo(function Card({ card }: CardProps) {
         />
 
             {/* Card Content */}
-            <div className="flex-1 p-2 sm:p-4 overflow-auto scrollbar-hide">
+            <div className="flex-1 p-1 sm:p-2 overflow-auto scrollbar-hide">
               <CardContent type={card.type} props={activeTab} cardId={card.id} />
             </div>
           </CardMarketProvider>
@@ -874,25 +874,14 @@ function CardContent({
   const prevMarketQuestionRef = React.useRef<string | null | undefined>(undefined);
 
   // Update market question in context when market data changes
-  // For multimarkets, format as "Event Title • Option Name"
+  // Always show the actual market question, not the event title
   React.useEffect(() => {
     if (!setMarketQuestion || !isSingleMarketCard) return;
     
-    // Format title for multimarkets
+    // Always show the market question
     let displayTitle: string | null = null;
     if (market) {
-      const eventId = market.eventId;
-      const eventTitle = (market as any).eventTitle;
-      const hasEventInfo = eventId && eventTitle;
-      
-      if (hasEventInfo && market.question) {
-        // Format as "Event Title • Option Name"
-        const optionName = extractOptionName(market.question, eventTitle);
-        displayTitle = `${eventTitle} • ${optionName}`;
-      } else {
-        // Regular single market - just show question
-        displayTitle = market.question || null;
-      }
+      displayTitle = market.question || null;
     }
     
     // Only update if the value actually changed
@@ -901,7 +890,7 @@ function CardContent({
     prevMarketQuestionRef.current = displayTitle;
     // Provider handles deferral, so we can call directly
     setMarketQuestion(displayTitle);
-  }, [market, setMarketQuestion, isSingleMarketCard, extractOptionName]);
+  }, [market, setMarketQuestion, isSingleMarketCard]);
 
   // Memoize the handler so it only changes when dependencies change
   const marketChangeHandler = React.useCallback((marketId: string | null) => {

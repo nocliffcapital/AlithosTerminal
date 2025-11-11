@@ -61,8 +61,8 @@ export function WorkspaceGrid() {
   }, [isLocked, addCard]);
 
   const rowHeight = 30;
-  const margin: [number, number] = [12, 12];
-  const containerPadding: [number, number] = [12, 12];
+  const margin: [number, number] = [4, 4];
+  const containerPadding: [number, number] = [4, 4];
 
   // Only include non-minimized and non-maximized cards in the grid layout
   const gridCards = useMemo(
@@ -75,8 +75,8 @@ export function WorkspaceGrid() {
     () => ({
       lg: gridCards.map((card) => ({ ...card.layout, i: card.id })),
       md: gridCards.map((card) => ({ ...card.layout, i: card.id })),
-      sm: gridCards.map((card) => ({ ...card.layout, i: card.id, w: Math.min(card.layout.w, 4) })),
-      xs: gridCards.map((card) => ({ ...card.layout, i: card.id, w: Math.min(card.layout.w, 2) })),
+      sm: gridCards.map((card) => ({ ...card.layout, i: card.id, w: Math.min(card.layout.w, 8) })),
+      xs: gridCards.map((card) => ({ ...card.layout, i: card.id, w: Math.min(card.layout.w, 4) })),
     }),
     [gridCards]
   );
@@ -199,7 +199,7 @@ export function WorkspaceGrid() {
         className="layout"
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+        cols={{ lg: 24, md: 20, sm: 12, xs: 8, xxs: 4 }}
         rowHeight={rowHeight}
         onDrag={handleDrag}
         onDragStart={handleDragStart}

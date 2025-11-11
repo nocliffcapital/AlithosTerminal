@@ -347,7 +347,7 @@ function ChartCardComponent({ marketId: propMarketId, marketIds: propMarketIds, 
   }, []);
   
   // Set market question in context for navbar display
-  // Always show the full question (like Market Search), not extracted option name
+  // Always show the actual market question, not the event title
   React.useEffect(() => {
     if (!setMarketQuestion) return;
     
@@ -355,23 +355,15 @@ function ChartCardComponent({ marketId: propMarketId, marketIds: propMarketIds, 
     requestAnimationFrame(() => {
       // Only set for single market (show in navbar)
       if (effectiveMarketIds.length === 1 && chartMarket) {
-        // Always show the full question, matching Market Search behavior
+        // Always show the full question
         setMarketQuestion(chartMarket.question || null);
       } else if (effectiveMarketIds.length > 1) {
-        // Multi-market - show event title if all markets are from same event
+        // Multi-market - show first market's question
         const firstMarket = markets[0];
-        if (firstMarket) {
-          const firstEventId = firstMarket.eventId;
-          const allSameEvent = firstEventId && 
-            markets.every(m => m?.eventId === firstEventId);
-          
-          if (allSameEvent && (firstMarket as any).eventTitle) {
-            setMarketQuestion((firstMarket as any).eventTitle);
-          } else {
-            setMarketQuestion(`${effectiveMarketIds.length} markets`);
-          }
+        if (firstMarket && firstMarket.question) {
+          setMarketQuestion(firstMarket.question);
         } else {
-          setMarketQuestion(null);
+          setMarketQuestion(`${effectiveMarketIds.length} markets`);
         }
       } else {
         setMarketQuestion(null);
@@ -936,6 +928,7 @@ function ChartCardComponent({ marketId: propMarketId, marketIds: propMarketIds, 
           action={{
             label: 'Select Market',
             onClick: handleMarketSelectorOpen,
+            icon: Search,
           }}
           className="p-4"
         />
@@ -1119,12 +1112,26 @@ function ChartCardComponent({ marketId: propMarketId, marketIds: propMarketIds, 
           />
         ) : (
           <LightweightChartCard
-            series={chartSeries}
+            series={chartSeries.filter((s) => {
+              // Ensure series has valid color and data array (can be empty)
+              return s && 
+                     s.color && 
+                     typeof s.color === 'string' && 
+                     s.color.trim() !== '' &&
+                     Array.isArray(s.data);
+            })}
             showLabels={true}
             timeRange={timeRange}
             onToggleMarket={handleToggleMarketVisibility}
             hiddenMarketIds={hiddenMarketIds}
-            allMarketsSeriesData={allMarketsSeriesData}
+            allMarketsSeriesData={allMarketsSeriesData?.filter((s) => {
+              // Ensure series has valid color and data array (can be empty)
+              return s && 
+                     s.color && 
+                     typeof s.color === 'string' && 
+                     s.color.trim() !== '' &&
+                     Array.isArray(s.data);
+            })}
           />
         )}
       </div>

@@ -132,6 +132,11 @@ export function WorkspaceSelector() {
   };
 
   const handleStartEdit = (workspaceId: string, currentName: string) => {
+    // Prevent editing TRADING workspaces
+    const workspace = workspaces.find((w: any) => w.id === workspaceId);
+    if (workspace?.type === 'TRADING') {
+      return;
+    }
     setEditingWorkspaceId(workspaceId);
     setEditingName(currentName);
   };
@@ -332,7 +337,9 @@ export function WorkspaceSelector() {
                     ) : (
                       <div className="flex items-center justify-between w-full group">
                         <div className="flex flex-col flex-1 min-w-0">
-                          <span className="text-xs font-medium truncate">{workspace.name}</span>
+                          <span className="text-xs font-medium truncate">
+                            {workspace.type === 'TRADING' ? 'Trading' : workspace.name}
+                          </span>
                           <span className="text-[10px] text-muted-foreground">
                             {workspace.type || 'CUSTOM'}
                           </span>

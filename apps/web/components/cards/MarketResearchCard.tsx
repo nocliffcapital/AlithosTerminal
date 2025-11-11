@@ -277,6 +277,7 @@ function MarketResearchCardComponent({ marketId: propMarketId, onMarketChange }:
           action={{
             label: 'Select Market',
             onClick: () => setShowMarketSelector(true),
+            icon: Search,
           }}
           className="p-4"
         />

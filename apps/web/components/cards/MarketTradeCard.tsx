@@ -693,6 +693,7 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
           action={{
             label: 'Select Market',
             onClick: () => setShowMarketSelector(true),
+            icon: Search,
           }}
           className="p-4"
         />

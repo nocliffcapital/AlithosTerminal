@@ -59,6 +59,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // Get Prisma client
     const prisma = getPrismaClient();
 
+    // Check if workspace is TRADING type before allowing name updates
+    const existingWorkspace = await prisma.workspace.findUnique({
+      where: { id },
+      select: { type: true },
+    });
+
+    if (!existingWorkspace) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    // Prevent name updates for TRADING workspaces
+    if (name !== undefined && existingWorkspace.type === 'TRADING') {
+      return NextResponse.json(
+        { error: 'Cannot rename trading workspace', details: 'Trading workspace name is fixed' },
+        { status: 400 }
+      );
+    }
+
     // Build update data object
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;

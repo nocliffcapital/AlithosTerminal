@@ -5,11 +5,12 @@ import { useMarkets } from '@/lib/hooks/usePolymarketData';
 import { useRealtimePrice } from '@/lib/hooks/useRealtimePrice';
 import { useMarketStore } from '@/stores/market-store';
 import { useWatchlistStore, isEventId, getEventIdFromPrefixed } from '@/stores/watchlist-store';
-import { Loader2, X, Calendar, DollarSign, BarChart3, Tag, TrendingUp, TrendingDown, ListPlus, ChevronDown, ChevronRight, Search, ArrowUpDown } from 'lucide-react';
+import { Loader2, X, Calendar, DollarSign, BarChart3, Tag, TrendingUp, TrendingDown, ListPlus, ChevronDown, ChevronRight, Search, ArrowUpDown, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +18,22 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { MARKET_CARD_TYPES } from '@/components/MarketSelector';
+import { useLayoutStore } from '@/stores/layout-store';
 import { cn } from '@/lib/utils';
 
 interface WatchlistCardProps {
@@ -35,12 +52,16 @@ function WatchlistCardComponent({ marketIds: propMarketIds }: WatchlistCardProps
   const { marketIds: watchlistIds, removeFromWatchlist, getEventIds, removeEventFromWatchlist } = useWatchlistStore();
   const { data: allMarkets, isLoading } = useMarkets({ active: true }); // Fetch all markets (no limit)
   const { selectMarket, getPrice, getMarket, selectedMarketId } = useMarketStore();
+  const { addCard, createLinkGroup } = useLayoutStore();
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [showCardSelector, setShowCardSelector] = useState(false);
+  const [selectedCardTypes, setSelectedCardTypes] = useState<Set<string>>(new Set());
+  const [cardSelectorMarketIds, setCardSelectorMarketIds] = useState<string[]>([]);
   
   // Use prop marketIds if provided, otherwise use watchlist store
   const displayMarketIds = propMarketIds || watchlistIds;
@@ -370,6 +391,90 @@ function WatchlistCardComponent({ marketIds: propMarketIds }: WatchlistCardProps
     return labels[sortBy];
   }, [sortBy]);
 
+  // Handler to toggle card type selection
+  const handleCardTypeToggle = useCallback((cardType: string) => {
+    setSelectedCardTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(cardType)) {
+        next.delete(cardType);
+      } else {
+        next.add(cardType);
+      }
+      return next;
+    });
+  }, []);
+
+  // Handler to confirm card selection and add cards
+  const handleConfirmCardSelection = useCallback(() => {
+    if (selectedCardTypes.size === 0 || cardSelectorMarketIds.length === 0) return;
+
+    // Collect all card IDs that will be created
+    const createdCardIds: string[] = [];
+
+    selectedCardTypes.forEach((cardType) => {
+      if (cardType === 'chart') {
+        // For chart cards, use marketIds if multiple markets, marketId if single
+        const cardId = `${cardType}-${Date.now()}-${Math.random()}`;
+        createdCardIds.push(cardId);
+        addCard({
+          id: cardId,
+          type: cardType as any,
+          props: cardSelectorMarketIds.length > 1 
+            ? { marketIds: cardSelectorMarketIds }
+            : { marketId: cardSelectorMarketIds[0] },
+        });
+      } else {
+        // For other cards, add one card per market
+        cardSelectorMarketIds.forEach((marketId) => {
+          const cardId = `${cardType}-${Date.now()}-${Math.random()}`;
+          createdCardIds.push(cardId);
+          addCard({
+            id: cardId,
+            type: cardType as any,
+            props: { marketId },
+          });
+        });
+      }
+    });
+
+    // If multiple cards were created, automatically link them with the next available color
+    if (createdCardIds.length > 1) {
+      createLinkGroup(createdCardIds);
+    }
+
+    setShowCardSelector(false);
+    setSelectedCardTypes(new Set());
+    setCardSelectorMarketIds([]);
+  }, [selectedCardTypes, cardSelectorMarketIds, addCard, createLinkGroup]);
+
+  // Handler to cancel card selection
+  const handleCancelCardSelection = useCallback(() => {
+    setShowCardSelector(false);
+    setSelectedCardTypes(new Set());
+    setCardSelectorMarketIds([]);
+  }, []);
+
+  // Group cards by category for display
+  const groupedCardTypes = useMemo(() => {
+    const grouped = MARKET_CARD_TYPES.reduce((acc, card) => {
+      if (!acc[card.category]) {
+        acc[card.category] = [];
+      }
+      acc[card.category].push(card);
+      return acc;
+    }, {} as Record<string, typeof MARKET_CARD_TYPES>);
+
+    // Define category order
+    const categoryOrder: Array<keyof typeof grouped> = ['Trading', 'Research', 'Analysis', 'Risk Management', 'Utilities'];
+
+    return categoryOrder
+      .filter(category => grouped[category] && grouped[category].length > 0)
+      .map(category => ({
+        category,
+        cards: grouped[category],
+      }));
+  }, []);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -609,27 +714,28 @@ function WatchlistCardComponent({ marketIds: propMarketIds }: WatchlistCardProps
                     const isSelected = market.id === selectedMarketId;
 
                     return (
-                      <div
-                        key={market.id}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('marketId', market.id);
-                          e.dataTransfer.setData('marketQuestion', market.question || '');
-                          e.dataTransfer.effectAllowed = 'move';
-                          if (e.currentTarget instanceof HTMLElement) {
-                            e.currentTarget.style.opacity = '0.5';
-                          }
-                        }}
-                        onDragEnd={(e) => {
-                          if (e.currentTarget instanceof HTMLElement) {
-                            e.currentTarget.style.opacity = '1';
-                          }
-                        }}
-                        className={cn(
-                          "px-3 py-2 pl-8 hover:bg-accent/30 border-b border-border/30 transition-colors duration-200 group cursor-move",
-                          isSelected && "bg-primary/10 border-l-2 border-l-primary"
-                        )}
-                      >
+                      <ContextMenu key={market.id}>
+                        <ContextMenuTrigger asChild>
+                          <div
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('marketId', market.id);
+                              e.dataTransfer.setData('marketQuestion', market.question || '');
+                              e.dataTransfer.effectAllowed = 'move';
+                              if (e.currentTarget instanceof HTMLElement) {
+                                e.currentTarget.style.opacity = '0.5';
+                              }
+                            }}
+                            onDragEnd={(e) => {
+                              if (e.currentTarget instanceof HTMLElement) {
+                                e.currentTarget.style.opacity = '1';
+                              }
+                            }}
+                            className={cn(
+                              "px-3 py-2 pl-8 hover:bg-accent/30 border-b border-border/30 transition-colors duration-200 group cursor-move",
+                              isSelected && "bg-primary/10 border-l-2 border-l-primary"
+                            )}
+                          >
                         <div className="flex items-start justify-between gap-2">
                           {market.imageUrl && !imageErrors.has(market.id) && (
                             <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 overflow-hidden border border-border bg-accent/20">
@@ -691,6 +797,22 @@ function WatchlistCardComponent({ marketIds: propMarketIds }: WatchlistCardProps
                           </div>
                         </div>
                       </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent className="w-56">
+                          <ContextMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCardSelectorMarketIds([market.id]);
+                              setSelectedCardTypes(new Set());
+                              setShowCardSelector(true);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <LayoutGrid className="h-4 w-4 mr-2" />
+                            Select Cards
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     );
                   })}
                 </div>
@@ -712,27 +834,28 @@ function WatchlistCardComponent({ marketIds: propMarketIds }: WatchlistCardProps
           const isSelected = market.id === selectedMarketId;
 
           return (
-            <div
-              key={market.id}
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData('marketId', market.id);
-                e.dataTransfer.setData('marketQuestion', market.question || '');
-                e.dataTransfer.effectAllowed = 'move';
-                if (e.currentTarget instanceof HTMLElement) {
-                  e.currentTarget.style.opacity = '0.5';
-                }
-              }}
-              onDragEnd={(e) => {
-                if (e.currentTarget instanceof HTMLElement) {
-                  e.currentTarget.style.opacity = '1';
-                }
-              }}
-              className={cn(
-                "px-3 py-2.5 hover:bg-accent/50 border-b border-border/50 transition-colors duration-200 group cursor-move",
-                isSelected && "bg-primary/10 border-l-2 border-l-primary"
-              )}
-            >
+            <ContextMenu key={market.id}>
+              <ContextMenuTrigger asChild>
+                <div
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('marketId', market.id);
+                    e.dataTransfer.setData('marketQuestion', market.question || '');
+                    e.dataTransfer.effectAllowed = 'move';
+                    if (e.currentTarget instanceof HTMLElement) {
+                      e.currentTarget.style.opacity = '0.5';
+                    }
+                  }}
+                  onDragEnd={(e) => {
+                    if (e.currentTarget instanceof HTMLElement) {
+                      e.currentTarget.style.opacity = '1';
+                    }
+                  }}
+                  className={cn(
+                    "px-3 py-2.5 hover:bg-accent/50 border-b border-border/50 transition-colors duration-200 group cursor-move",
+                    isSelected && "bg-primary/10 border-l-2 border-l-primary"
+                  )}
+                >
               <div className="flex items-start justify-between gap-2">
                 {market.imageUrl && !imageErrors.has(market.id) && (
                   <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 overflow-hidden border border-border bg-accent/20">
@@ -819,9 +942,128 @@ function WatchlistCardComponent({ marketIds: propMarketIds }: WatchlistCardProps
                 </div>
               </div>
             </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent className="w-56">
+                <ContextMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCardSelectorMarketIds([market.id]);
+                    setSelectedCardTypes(new Set());
+                    setShowCardSelector(true);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <LayoutGrid className="h-4 w-4 mr-2" />
+                  Select Cards
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </div>
+
+      {/* Card Selector Dialog */}
+      <Dialog open={showCardSelector} onOpenChange={(open) => {
+        if (!open) {
+          handleCancelCardSelection();
+        }
+      }}>
+        <DialogContent className="max-w-md flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Select Cards</DialogTitle>
+            <DialogDescription>
+              Select the card types you want to add for {cardSelectorMarketIds.length === 1 ? 'this market' : `these ${cardSelectorMarketIds.length} markets`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 flex flex-col min-h-0 space-y-4">
+            {/* Selected Market Info (if single market) */}
+            {cardSelectorMarketIds.length === 1 && (() => {
+              const selectedMarket = allMarkets?.find(m => m.id === cardSelectorMarketIds[0]);
+              if (selectedMarket) {
+                return (
+                  <div className="p-3 bg-accent/30 rounded-lg border border-border">
+                    <div className="flex items-start gap-3">
+                      {selectedMarket.imageUrl && !imageErrors.has(selectedMarket.id) && (
+                        <div className="flex-shrink-0 w-12 h-12 overflow-hidden border border-border bg-accent/20 rounded">
+                          <img
+                            src={selectedMarket.imageUrl}
+                            alt={selectedMarket.question}
+                            className="w-full h-full object-cover"
+                            onError={() => {
+                              setImageErrors(prev => new Set([...prev, selectedMarket.id]));
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm text-foreground truncate">
+                          {selectedMarket.question}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {selectedMarket.slug?.split('-').slice(0, 2).join('-') || selectedMarket.id.slice(0, 8)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            {/* Card Type Checkboxes - Grouped by Category */}
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {groupedCardTypes.map(({ category, cards }) => (
+                <div key={category} className="space-y-2">
+                  <div className="px-1 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {category}
+                  </div>
+                  <div className="space-y-1.5">
+                    {cards.map(({ type, label, icon: Icon }) => {
+                      const isSelected = selectedCardTypes.has(type);
+                      return (
+                        <div
+                          key={type}
+                          onClick={() => handleCardTypeToggle(type)}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent/50 cursor-pointer transition-colors"
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleCardTypeToggle(type)}
+                            className="flex-shrink-0"
+                          />
+                          <Icon className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="text-sm font-medium flex-1">{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-2 border-t border-border">
+              <Button
+                variant="outline"
+                onClick={handleCancelCardSelection}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmCardSelection}
+                className="flex-1"
+                disabled={selectedCardTypes.size === 0}
+              >
+                {selectedCardTypes.size === 0 
+                  ? 'Select at least one card' 
+                  : `Add ${selectedCardTypes.size} card${selectedCardTypes.size > 1 ? 's' : ''}`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
