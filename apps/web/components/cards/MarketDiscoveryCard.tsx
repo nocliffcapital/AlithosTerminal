@@ -815,7 +815,33 @@ function MarketDiscoveryCardComponent() {
 
   // Group related markets after filtering and sorting - memoize this expensive operation
   const groupedMarkets = useMemo(() => {
-    return groupRelatedMarkets(filteredAndSortedMarkets);
+    const grouped = groupRelatedMarkets(filteredAndSortedMarkets);
+    
+    // Sort groups by highest probability to lowest probability
+    // For groups, use the first market's probability (markets are already sorted by probability descending within groups)
+    return grouped.sort((a, b) => {
+      if (a.type === 'group' && b.type === 'group') {
+        // Both are groups - compare by highest probability market in each group
+        const probA = a.group.markets.length > 0 
+          ? (a.group.markets[0].outcomePrices?.YES || 0) * 100 
+          : 0;
+        const probB = b.group.markets.length > 0 
+          ? (b.group.markets[0].outcomePrices?.YES || 0) * 100 
+          : 0;
+        return probB - probA; // Descending order (highest first)
+      } else if (a.type === 'group') {
+        // Groups come before standalone markets
+        return -1;
+      } else if (b.type === 'group') {
+        // Standalone markets come after groups
+        return 1;
+      } else {
+        // Both are standalone - compare by probability
+        const probA = (a.market.outcomePrices?.YES || 0) * 100;
+        const probB = (b.market.outcomePrices?.YES || 0) * 100;
+        return probB - probA; // Descending order (highest first)
+      }
+    });
   }, [filteredAndSortedMarkets, groupRelatedMarkets]);
 
   const handleSelectMarket = (marketId: string) => {
@@ -1047,7 +1073,32 @@ function MarketDiscoveryCardComponent() {
     if (!watchlistMarkets || watchlistMarkets.length === 0) return [];
     
     // Use the same grouping logic as markets tab
-    return groupRelatedMarkets(watchlistMarkets);
+    const grouped = groupRelatedMarkets(watchlistMarkets);
+    
+    // Sort groups by highest probability to lowest probability (same as markets tab)
+    return grouped.sort((a, b) => {
+      if (a.type === 'group' && b.type === 'group') {
+        // Both are groups - compare by highest probability market in each group
+        const probA = a.group.markets.length > 0 
+          ? (a.group.markets[0].outcomePrices?.YES || 0) * 100 
+          : 0;
+        const probB = b.group.markets.length > 0 
+          ? (b.group.markets[0].outcomePrices?.YES || 0) * 100 
+          : 0;
+        return probB - probA; // Descending order (highest first)
+      } else if (a.type === 'group') {
+        // Groups come before standalone markets
+        return -1;
+      } else if (b.type === 'group') {
+        // Standalone markets come after groups
+        return 1;
+      } else {
+        // Both are standalone - compare by probability
+        const probA = (a.market.outcomePrices?.YES || 0) * 100;
+        const probB = (b.market.outcomePrices?.YES || 0) * 100;
+        return probB - probA; // Descending order (highest first)
+      }
+    });
   }, [watchlistMarkets, groupRelatedMarkets]);
 
   return (
