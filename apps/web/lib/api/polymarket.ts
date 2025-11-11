@@ -2699,12 +2699,27 @@ class PolymarketClient {
         }
       `;
 
-      let data = await this.fetchSubgraph<{ positions: any[] }>(
-        query,
-        { marketId, limit },
-        'pnl',
-        SUBGRAPH_ID_PNL
-      );
+      let data: { positions?: any[] } = {};
+      try {
+        // Suppress errors since we'll handle them gracefully
+        data = await this.fetchSubgraph<{ positions: any[] }>(
+          query,
+          { marketId, limit },
+          'pnl',
+          SUBGRAPH_ID_PNL,
+          true // suppressErrors - we'll handle the error ourselves
+        );
+      } catch (error: any) {
+        // Check if the error is about the 'positions' field not existing
+        if (error?.message?.includes('no field `positions`') || 
+            error?.message?.includes('Type `Query` has no field')) {
+          // The P&L subgraph might not support querying positions by marketId
+          // Return empty array gracefully (don't log as error since this is expected)
+          return [];
+        }
+        // Re-throw other errors
+        throw error;
+      }
 
       // If no results and we have conditionId, try querying by conditionId
       if ((!data.positions || data.positions.length === 0) && conditionId) {
@@ -2730,12 +2745,26 @@ class PolymarketClient {
           }
         `;
 
-        data = await this.fetchSubgraph<{ positions: any[] }>(
-          query,
-          { conditionId, limit },
-          'pnl',
-          SUBGRAPH_ID_PNL
-        );
+        try {
+          // Suppress errors since we'll handle them gracefully
+          data = await this.fetchSubgraph<{ positions: any[] }>(
+            query,
+            { conditionId, limit },
+            'pnl',
+            SUBGRAPH_ID_PNL,
+            true // suppressErrors - we'll handle the error ourselves
+          );
+        } catch (error: any) {
+          // Check if the error is about the 'positions' field not existing
+          if (error?.message?.includes('no field `positions`') || 
+              error?.message?.includes('Type `Query` has no field')) {
+            // The P&L subgraph might not support querying positions by conditionId
+            // Return empty array gracefully (don't log as error since this is expected)
+            return [];
+          }
+          // Re-throw other errors
+          throw error;
+        }
       }
 
       if (!data.positions || data.positions.length === 0) {

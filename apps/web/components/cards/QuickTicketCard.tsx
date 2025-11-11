@@ -22,11 +22,15 @@ import { simulateTrade } from '@/lib/web3/trade-simulation';
 import { Zap, Settings2, Play, Shield } from 'lucide-react';
 import { RiskWarning } from '@/components/ui/RiskWarning';
 import { useToast } from '@/components/Toast';
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator';
 
 function QuickTicketCardComponent() {
   const { selectedMarketId, getMarket } = useMarketStore();
   const { data: price, isLoading } = useMarketPrice(selectedMarketId);
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  
+  // Get data freshness timestamp
+  const dataUpdatedAt = price?.timestamp ? new Date(price.timestamp) : undefined;
   
   // Subscribe to real-time price updates for instant updates
   useRealtimePrice(selectedMarketId || null, 'YES');
@@ -273,7 +277,16 @@ function QuickTicketCardComponent() {
     <div className="h-full flex flex-col p-3 space-y-3 overflow-y-auto">
       {/* Market Info */}
       <div className="text-xs flex-shrink-0 border-b border-border pb-2">
-        <div className="font-medium truncate">{market?.question || 'Market'}</div>
+        <div className="flex items-center justify-between">
+          <div className="font-medium truncate">{market?.question || 'Market'}</div>
+          {dataUpdatedAt && (
+            <DataFreshnessIndicator 
+              timestamp={dataUpdatedAt} 
+              thresholdSeconds={30}
+              showAge={true}
+            />
+          )}
+        </div>
         <div className="text-muted-foreground mt-0.5">
           Current: {currentProbability.toFixed(1)}%
         </div>

@@ -47,8 +47,8 @@ export const chartTheme = {
  * Chart color constants matching current implementation
  */
 export const chartColors = {
-  yes: '#10b981', // Green
-  no: '#ef4444', // Red
+  yes: '#3b82f6', // Blue
+  no: '#ca8a04', // Dark Yellow
   multiOutcome: [
     '#10b981', // green
     '#ef4444', // red

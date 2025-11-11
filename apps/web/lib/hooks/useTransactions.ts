@@ -36,7 +36,7 @@ export interface TransactionHistoryParams {
  * Hook to fetch transaction history
  */
 export function useTransactions(params?: TransactionHistoryParams) {
-  const { user } = usePrivy();
+  const { user, authenticated } = usePrivy();
   const { dbUser } = useAuth();
 
   // Get wallet address from various sources
@@ -62,7 +62,16 @@ export function useTransactions(params?: TransactionHistoryParams) {
         type,
       });
 
-      const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+      const headers: HeadersInit = {};
+      
+      // Add Privy user ID header for authentication
+      if (user?.id) {
+        headers['X-Privy-User-Id'] = user.id;
+      }
+
+      const response = await fetch(`/api/transactions?${searchParams.toString()}`, {
+        headers,
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -77,7 +86,7 @@ export function useTransactions(params?: TransactionHistoryParams) {
         offset: data.offset || offset,
       };
     },
-    enabled: !!walletAddress,
+    enabled: !!walletAddress && authenticated && !!user?.id,
     staleTime: 5 * 60 * 1000, // 5 minutes - transactions are on-chain and don't change once confirmed
     refetchInterval: 5 * 60 * 1000, // 5 minutes - new transactions appear when trades occur, polling is fallback only
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)
@@ -88,7 +97,7 @@ export function useTransactions(params?: TransactionHistoryParams) {
  * Hook to fetch a single transaction by hash
  */
 export function useTransaction(txHash: string | null) {
-  const { user } = usePrivy();
+  const { user, authenticated } = usePrivy();
   const { dbUser } = useAuth();
 
   const walletAddress = (user?.wallet?.address as Address | undefined) ||
@@ -109,7 +118,16 @@ export function useTransaction(txHash: string | null) {
         type: 'all',
       });
 
-      const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+      const headers: HeadersInit = {};
+      
+      // Add Privy user ID header for authentication
+      if (user?.id) {
+        headers['X-Privy-User-Id'] = user.id;
+      }
+
+      const response = await fetch(`/api/transactions?${searchParams.toString()}`, {
+        headers,
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch transaction: ${response.status}`);
@@ -124,7 +142,7 @@ export function useTransaction(txHash: string | null) {
 
       return transaction as Transaction;
     },
-    enabled: !!txHash && !!walletAddress,
+    enabled: !!txHash && !!walletAddress && authenticated && !!user?.id,
     staleTime: 60000, // 1 minute
   });
 }

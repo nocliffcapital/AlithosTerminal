@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * Workspace type enum
  */
-export const workspaceTypeSchema = z.enum(['SCALPING', 'EVENT_DAY', 'ARB_DESK', 'RESEARCH', 'CUSTOM']);
+export const workspaceTypeSchema = z.enum(['SCALPING', 'EVENT_DAY', 'ARB_DESK', 'RESEARCH', 'CUSTOM', 'TRADING']);
 
 /**
  * Create workspace validation schema

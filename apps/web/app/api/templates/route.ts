@@ -57,28 +57,56 @@ export async function GET(request: NextRequest) {
 
     const prisma = getPrismaClient();
 
+    // Build where clause more safely
     const where: any = {};
     if (userId) {
       if (includePublic) {
         where.OR = [
           { userId },
           { isPublic: true },
+          { isDefault: true }, // Always include default templates
         ];
       } else {
-        where.userId = userId;
+        where.OR = [
+          { userId },
+          { isDefault: true }, // Always include default templates
+        ];
       }
     } else if (includePublic) {
-      where.isPublic = true;
+      where.OR = [
+        { isPublic: true },
+        { isDefault: true }, // Always include default templates
+      ];
     } else {
-      return NextResponse.json({ error: 'Missing userId or includePublic' }, { status: 400 });
+      // If no userId and includePublic is false, still return default templates
+      where.isDefault = true;
     }
 
-    const templates = await prisma.template.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+    try {
+      const templates = await prisma.template.findMany({
+        where,
+        orderBy: [
+          { isDefault: 'desc' } as any, // Default templates first
+          { createdAt: 'desc' },
+        ],
+      });
 
-    return NextResponse.json({ templates });
+      return NextResponse.json({ templates });
+    } catch (dbError) {
+      console.error('Database query error:', dbError);
+      // If query fails, try a simpler query as fallback
+      try {
+        const templates = await prisma.template.findMany({
+          where: { isDefault: true } as any,
+          orderBy: { createdAt: 'desc' },
+        });
+        console.warn('Fallback query succeeded, returning default templates only');
+        return NextResponse.json({ templates });
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        throw dbError; // Throw original error
+      }
+    }
   } catch (error) {
     console.error('Templates fetch error:', error);
     if (error instanceof Error) {
@@ -104,10 +132,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, name, description, config, isPublic } = body;
+    const { userId, name, description, config, isPublic, isDefault } = body;
 
     if (!userId || !name || !config) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Prevent users from creating default templates - only system can do that
+    if (isDefault === true) {
+      return NextResponse.json(
+        { error: 'Cannot create default templates via this endpoint' },
+        { status: 403 }
+      );
     }
 
     ensureDatabaseUrl();
@@ -129,7 +165,8 @@ export async function POST(request: NextRequest) {
         description: description || null,
         config: config as Prisma.InputJsonValue,
         isPublic: isPublic ?? false,
-      },
+        isDefault: false, // Users cannot create default templates
+      } as any,
     });
 
     return NextResponse.json({ template });

@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { Address, formatUnits, parseUnits } from 'viem';
+import { Address, formatUnits, parseUnits, getAddress, isAddress } from 'viem';
 import { createPublicClient, http } from 'viem';
 import { polygon } from 'viem/chains';
 import { erc20Abi } from 'viem';
@@ -29,7 +29,35 @@ export function AllowanceManager({ open, onOpenChange }: AllowanceManagerProps) 
   const [isRevoking, setIsRevoking] = useState(false);
   const [approvalAmount, setApprovalAmount] = useState<string>('');
 
-  const walletAddress = user?.wallet?.address as Address | undefined;
+  // Get and validate wallet address
+  const walletAddress = useMemo(() => {
+    const addr = user?.wallet?.address;
+    if (!addr || typeof addr !== 'string') return undefined;
+    
+    // Clean the address - remove any whitespace and ensure it starts with 0x
+    let cleanAddr = addr.trim();
+    if (!cleanAddr.startsWith('0x')) {
+      cleanAddr = '0x' + cleanAddr;
+    }
+    
+    // Validate length (should be 42 characters: 0x + 40 hex chars)
+    if (cleanAddr.length !== 42) {
+      console.error('Invalid wallet address length:', cleanAddr, `(${cleanAddr.length} chars, expected 42)`);
+      return undefined;
+    }
+    
+    // Validate and checksum the address
+    try {
+      if (isAddress(cleanAddr)) {
+        return getAddress(cleanAddr) as Address;
+      }
+      console.error('Invalid wallet address format:', cleanAddr);
+      return undefined;
+    } catch (error) {
+      console.error('Failed to process wallet address:', error, cleanAddr);
+      return undefined;
+    }
+  }, [user?.wallet?.address]);
 
   useEffect(() => {
     if (open && walletAddress) {
@@ -38,7 +66,10 @@ export function AllowanceManager({ open, onOpenChange }: AllowanceManagerProps) 
   }, [open, walletAddress]);
 
   const loadAllowance = async () => {
-    if (!walletAddress) return;
+    if (!walletAddress) {
+      showError('Invalid wallet address', 'Please connect a valid wallet');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -154,7 +185,7 @@ export function AllowanceManager({ open, onOpenChange }: AllowanceManagerProps) 
           {/* Current Allowance */}
           <div className="space-y-2">
             <Label>Current Allowance</Label>
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded border">
+            <div className="flex items-center justify-between p-3 bg-background/70 rounded border">
               <div className="flex items-center gap-2">
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />

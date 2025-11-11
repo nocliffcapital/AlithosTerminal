@@ -48,7 +48,7 @@ export function BalanceBar() {
     usdc: null,
     pol: null,
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const isInitialLoadRef = useRef(true);
 
   useEffect(() => {
@@ -61,12 +61,11 @@ export function BalanceBar() {
 
     // Reset initial load state when wallet changes
     isInitialLoadRef.current = true;
+    setIsLoading(true); // Show loading when wallet changes
 
     const fetchBalances = async () => {
-      // Only show loading state on initial load
-      if (isInitialLoadRef.current) {
-        setIsLoading(true);
-      }
+      // Always show loading state when fetching
+      setIsLoading(true);
       try {
         // Use public RPC endpoint for Polygon
         const publicClient = createPublicClient({
@@ -179,7 +178,10 @@ export function BalanceBar() {
                   {formatBalance(balances.pol.balance)}
                 </span>
               ) : (
-                <span className="text-xs font-semibold leading-tight">0.00</span>
+                <div className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Loading...</span>
+                </div>
               )}
             </div>
           </div>
@@ -199,7 +201,10 @@ export function BalanceBar() {
                   {formatBalance(balances.usdc.balance)}
                 </span>
               ) : (
-                <span className="text-xs font-semibold leading-tight">0.00</span>
+                <div className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Loading...</span>
+                </div>
               )}
             </div>
           </div>

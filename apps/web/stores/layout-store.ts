@@ -159,6 +159,11 @@ const saveFavouritesToStorage = (favourites: CardType[]) => {
   }
 };
 
+// Helper function to check if a workspace is a trading workspace
+export function isTradingWorkspace(workspaceType: string | undefined | null): boolean {
+  return workspaceType === 'TRADING';
+}
+
 export const useLayoutStore = create<LayoutState>((set, get) => ({
   currentWorkspaceId: null,
   userId: null,
@@ -304,68 +309,163 @@ export const useLayoutStore = create<LayoutState>((set, get) => ({
       layout = updatedWorkspaces[id];
     }
     
-    // If no layout exists after trying to load, create a default one with a few starter cards
+    // If no layout exists after trying to load, try to load default template
     if (!layout) {
-      console.log('[setCurrentWorkspace] No layout found, creating default layout for workspace:', id);
-      const defaultCards: CardConfig[] = [
-        {
-          id: 'watchlist-1',
-          type: 'watchlist',
-          layout: { i: 'watchlist-1', x: 0, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
-        },
-        {
-          id: 'tape-1',
-          type: 'tape',
-          layout: { i: 'tape-1', x: 4, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
-        },
-        {
-          id: 'quick-ticket-1',
-          type: 'quick-ticket',
-          layout: { i: 'quick-ticket-1', x: 8, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
-        },
-      ];
+      console.log('[setCurrentWorkspace] No layout found, trying to load default template for workspace:', id);
+      try {
+        // Fetch default templates
+        const templatesResponse = await fetch('/api/templates');
+        if (templatesResponse.ok) {
+          const templatesData = await templatesResponse.json();
+          const templates = templatesData.templates || [];
+          
+          // Find the "Starter Workspace" default template
+          const starterTemplate = templates.find((t: any) => 
+            t.isDefault && t.name === 'Starter Workspace'
+          );
+          
+          if (starterTemplate && starterTemplate.config) {
+            const templateConfig = starterTemplate.config as unknown as WorkspaceLayout;
+            // Generate unique IDs for cards to avoid conflicts
+            const cardsWithUniqueIds = (templateConfig.cards || []).map((card: CardConfig, index: number) => ({
+              ...card,
+              id: `${card.type}-${Date.now()}-${index}`,
+              layout: {
+                ...card.layout,
+                i: `${card.type}-${Date.now()}-${index}`,
+              },
+            }));
+            
+            layout = {
+              id: `layout-${id}`,
+              name: templateConfig.name || 'Default Layout',
+              cards: cardsWithUniqueIds,
+              _lastLoaded: Date.now(),
+            };
+            
+            set((state) => ({
+              workspaces: {
+                ...state.workspaces,
+                [id]: layout,
+              },
+            }));
+            console.log('[setCurrentWorkspace] Loaded default template:', starterTemplate.name);
+          }
+        }
+      } catch (error) {
+        console.error('[setCurrentWorkspace] Failed to load default template:', error);
+      }
       
-      layout = {
-        id: `layout-${id}`,
-        name: 'Default Layout',
-        cards: defaultCards,
-        _lastLoaded: Date.now(),
-      };
-      
-      set((state) => ({
-        workspaces: {
-          ...state.workspaces,
-          [id]: layout,
-        },
-      }));
+      // Fallback to hardcoded default if template loading failed
+      if (!layout) {
+        console.log('[setCurrentWorkspace] Using fallback default layout');
+        const defaultCards: CardConfig[] = [
+          {
+            id: 'watchlist-1',
+            type: 'watchlist',
+            layout: { i: 'watchlist-1', x: 0, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+          },
+          {
+            id: 'tape-1',
+            type: 'tape',
+            layout: { i: 'tape-1', x: 4, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+          },
+          {
+            id: 'quick-ticket-1',
+            type: 'quick-ticket',
+            layout: { i: 'quick-ticket-1', x: 8, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+          },
+        ];
+        
+        layout = {
+          id: `layout-${id}`,
+          name: 'Default Layout',
+          cards: defaultCards,
+          _lastLoaded: Date.now(),
+        };
+        
+        set((state) => ({
+          workspaces: {
+            ...state.workspaces,
+            [id]: layout,
+          },
+        }));
+      }
     }
     
-    // If layout exists but has no cards, add default cards
+    // If layout exists but has no cards, try to load default template
     if (layout && (!layout.cards || layout.cards.length === 0)) {
-      const defaultCards: CardConfig[] = [
-        {
-          id: 'watchlist-1',
-          type: 'watchlist',
-          layout: { i: 'watchlist-1', x: 0, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
-        },
-        {
-          id: 'tape-1',
-          type: 'tape',
-          layout: { i: 'tape-1', x: 4, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
-        },
-      ];
+      console.log('[setCurrentWorkspace] Layout exists but is empty, trying to load default template');
+      try {
+        // Fetch default templates
+        const templatesResponse = await fetch('/api/templates');
+        if (templatesResponse.ok) {
+          const templatesData = await templatesResponse.json();
+          const templates = templatesData.templates || [];
+          
+          // Find the "Starter Workspace" default template
+          const starterTemplate = templates.find((t: any) => 
+            t.isDefault && t.name === 'Starter Workspace'
+          );
+          
+          if (starterTemplate && starterTemplate.config) {
+            const templateConfig = starterTemplate.config as unknown as WorkspaceLayout;
+            // Generate unique IDs for cards to avoid conflicts
+            const cardsWithUniqueIds = (templateConfig.cards || []).map((card: CardConfig, index: number) => ({
+              ...card,
+              id: `${card.type}-${Date.now()}-${index}`,
+              layout: {
+                ...card.layout,
+                i: `${card.type}-${Date.now()}-${index}`,
+              },
+            }));
+            
+            layout = {
+              ...layout,
+              cards: cardsWithUniqueIds,
+            };
+            
+            set((state) => ({
+              workspaces: {
+                ...state.workspaces,
+                [id]: layout,
+              },
+            }));
+            console.log('[setCurrentWorkspace] Loaded default template into empty layout:', starterTemplate.name);
+          }
+        }
+      } catch (error) {
+        console.error('[setCurrentWorkspace] Failed to load default template for empty layout:', error);
+      }
       
-      layout = {
-        ...layout,
-        cards: defaultCards,
-      };
-      
-      set((state) => ({
-        workspaces: {
-          ...state.workspaces,
-          [id]: layout,
-        },
-      }));
+      // Fallback to hardcoded default if template loading failed
+      if (!layout.cards || layout.cards.length === 0) {
+        console.log('[setCurrentWorkspace] Using fallback default cards for empty layout');
+        const defaultCards: CardConfig[] = [
+          {
+            id: 'watchlist-1',
+            type: 'watchlist',
+            layout: { i: 'watchlist-1', x: 0, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+          },
+          {
+            id: 'tape-1',
+            type: 'tape',
+            layout: { i: 'tape-1', x: 4, y: 0, w: 4, h: 6, minW: 2, minH: 3 },
+          },
+        ];
+        
+        layout = {
+          ...layout,
+          cards: defaultCards,
+        };
+        
+        set((state) => ({
+          workspaces: {
+            ...state.workspaces,
+            [id]: layout,
+          },
+        }));
+      }
     }
     
     // Ensure _lastLoaded is set

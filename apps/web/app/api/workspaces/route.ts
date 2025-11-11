@@ -76,7 +76,16 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    return NextResponse.json({ workspaces });
+    // Sort workspaces: TRADING type always first, then others by creation date
+    const sortedWorkspaces = [...workspaces].sort((a, b) => {
+      // TRADING workspaces always come first
+      if (a.type === 'TRADING' && b.type !== 'TRADING') return -1;
+      if (a.type !== 'TRADING' && b.type === 'TRADING') return 1;
+      // For same type, maintain creation date order
+      return 0;
+    });
+
+    return NextResponse.json({ workspaces: sortedWorkspaces });
   } catch (error) {
     console.error('Workspaces fetch error:', error);
     if (error instanceof Error) {
@@ -129,12 +138,31 @@ export async function POST(request: NextRequest) {
     // Get Prisma client
     const prisma = getPrismaClient();
 
+    // Check if user already has a TRADING workspace when trying to create one
+    const workspaceType = type ?? 'CUSTOM';
+    if (workspaceType === 'TRADING') {
+      const existingTradingWorkspace = await prisma.workspace.findFirst({
+        where: {
+          userId,
+          type: 'TRADING',
+        },
+      });
+
+      if (existingTradingWorkspace) {
+        return NextResponse.json(
+          { error: 'Trading workspace already exists', details: 'Only one trading workspace is allowed per user' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create workspace
     const workspace = await prisma.workspace.create({
       data: {
         userId,
         name,
-        type: type ?? 'CUSTOM',
+        type: workspaceType,
+        isDefault: workspaceType === 'TRADING', // Auto-set isDefault for TRADING workspaces
       },
     });
 

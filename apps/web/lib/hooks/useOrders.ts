@@ -31,7 +31,7 @@ export interface OrderHistoryParams {
  * Hook to fetch user's orders
  */
 export function useOrders(params?: OrderHistoryParams) {
-  const { user } = usePrivy();
+  const { user, authenticated } = usePrivy();
   const { dbUser } = useAuth();
 
   const walletAddress = (user?.wallet?.address as Address | undefined) ||
@@ -54,7 +54,16 @@ export function useOrders(params?: OrderHistoryParams) {
         offset: offset.toString(),
       });
 
-      const response = await fetch(`/api/orders?${searchParams.toString()}`);
+      const headers: HeadersInit = {};
+      
+      // Add Privy user ID header for authentication
+      if (user?.id) {
+        headers['X-Privy-User-Id'] = user.id;
+      }
+
+      const response = await fetch(`/api/orders?${searchParams.toString()}`, {
+        headers,
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -69,7 +78,7 @@ export function useOrders(params?: OrderHistoryParams) {
         offset: data.offset || offset,
       };
     },
-    enabled: !!walletAddress,
+    enabled: !!walletAddress && authenticated && !!user?.id,
     staleTime: 5 * 60 * 1000, // 5 minutes - real-time updates handle most changes
     refetchInterval: 5 * 60 * 1000, // 5 minutes - real-time updates handle most changes, polling is fallback only
     placeholderData: (previousData) => previousData, // Keep previous data while fetching (React Query v5)
@@ -80,7 +89,7 @@ export function useOrders(params?: OrderHistoryParams) {
  * Hook to fetch a single order by ID
  */
 export function useOrder(orderId: string | null) {
-  const { user } = usePrivy();
+  const { user, authenticated } = usePrivy();
   const { dbUser } = useAuth();
 
   const walletAddress = (user?.wallet?.address as Address | undefined) ||
@@ -93,7 +102,16 @@ export function useOrder(orderId: string | null) {
         throw new Error('Order ID and wallet address are required');
       }
 
-      const response = await fetch(`/api/orders/${orderId}`);
+      const headers: HeadersInit = {};
+      
+      // Add Privy user ID header for authentication
+      if (user?.id) {
+        headers['X-Privy-User-Id'] = user.id;
+      }
+
+      const response = await fetch(`/api/orders/${orderId}`, {
+        headers,
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -103,7 +121,7 @@ export function useOrder(orderId: string | null) {
       const data = await response.json();
       return data.order as Order;
     },
-    enabled: !!orderId && !!walletAddress,
+    enabled: !!orderId && !!walletAddress && authenticated && !!user?.id,
     staleTime: 10000,
   });
 }
@@ -125,8 +143,16 @@ export function useCancelOrder() {
         throw new Error('Wallet address is required');
       }
 
+      const headers: HeadersInit = {};
+      
+      // Add Privy user ID header for authentication
+      if (user?.id) {
+        headers['X-Privy-User-Id'] = user.id;
+      }
+
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'DELETE',
+        headers,
       });
 
       if (!response.ok) {
@@ -162,11 +188,18 @@ export function useModifyOrder() {
         throw new Error('Wallet address is required');
       }
 
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add Privy user ID header for authentication
+      if (user?.id) {
+        headers['X-Privy-User-Id'] = user.id;
+      }
+
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ price, size }),
       });
 
@@ -209,11 +242,18 @@ export function usePlaceOrder() {
         throw new Error('Wallet address is required');
       }
 
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add Privy user ID header for authentication
+      if (user?.id) {
+        headers['X-Privy-User-Id'] = user.id;
+      }
+
       const response = await fetch('/api/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(order),
       });
 

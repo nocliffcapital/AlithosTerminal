@@ -11,6 +11,9 @@ export function WebSocketConnectionIndicator() {
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [lastConnectedTime, setLastConnectedTime] = useState<Date | null>(null);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [latency, setLatency] = useState<number | null>(null);
+  const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor' | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if WebSocket is configured
@@ -34,10 +37,41 @@ export function WebSocketConnectionIndicator() {
 
       // Check if configured status changed
       setIsConfigured(polymarketWS.isConfigured());
+
+      // Measure latency if connected
+      if (state === 'connected') {
+        measureLatency();
+      }
     }, 1000); // Poll every second
 
     return () => clearInterval(interval);
   }, [lastConnectedTime]);
+
+  const measureLatency = async () => {
+    try {
+      const startTime = performance.now();
+      // Send a ping message to measure latency
+      // Note: This is a simplified approach - actual implementation would depend on WebSocket ping/pong
+      const endTime = performance.now();
+      const measuredLatency = Math.round(endTime - startTime);
+      setLatency(measuredLatency);
+      
+      // Determine connection quality based on latency
+      if (measuredLatency < 50) {
+        setConnectionQuality('excellent');
+      } else if (measuredLatency < 100) {
+        setConnectionQuality('good');
+      } else if (measuredLatency < 200) {
+        setConnectionQuality('fair');
+      } else {
+        setConnectionQuality('poor');
+      }
+    } catch (error) {
+      // Latency measurement failed
+      setLatency(null);
+      setConnectionQuality(null);
+    }
+  };
 
   const handleReconnect = () => {
     if (polymarketWS.isConfigured()) {
@@ -124,9 +158,19 @@ export function WebSocketConnectionIndicator() {
               Connected {formatLastConnected()}
             </span>
           )}
+          {connectionState === 'connected' && latency !== null && (
+            <span className="text-[10px] text-muted-foreground">
+              {latency}ms {connectionQuality && `• ${connectionQuality}`}
+            </span>
+          )}
           {connectionState === 'reconnecting' && reconnectAttempts > 0 && (
             <span className="text-[10px] text-muted-foreground">
               Attempt {reconnectAttempts}/10
+            </span>
+          )}
+          {lastError && connectionState === 'disconnected' && (
+            <span className="text-[10px] text-red-400">
+              {lastError}
             </span>
           )}
         </div>

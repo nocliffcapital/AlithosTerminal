@@ -78,7 +78,7 @@ class PolymarketRealtimeAdapter {
 
     const args: RealTimeDataClientArgs = {
       host: this.host,
-      autoReconnect: true, // Enable auto-reconnect - the package handles it well
+      autoReconnect: !this.isConnectionDisabled, // Disable auto-reconnect if we've hit max attempts
       pingInterval: 5000, // 5 seconds (default) - server expects frequent pings
       onConnect: (client) => {
         console.log('[RealtimeClient] ✅ Connected to Polymarket real-time data stream');
@@ -139,6 +139,7 @@ class PolymarketRealtimeAdapter {
           this.isConnecting = false;
           this.connectionAttempts = 0; // Reset on successful connection
           this.isConnectionDisabled = false;
+          this.lastConnectionAttempt = 0; // Reset last attempt time
           
           // When connected, subscribe to all queued subscriptions after a delay
           // to ensure the WebSocket is fully ready
@@ -168,8 +169,36 @@ class PolymarketRealtimeAdapter {
           this.isConnecting = true;
         } else if (status === ConnectionStatus.DISCONNECTED) {
           this.isConnecting = false;
-          // Don't log every disconnect to avoid spam, only log if we're not in a cooldown
-          if (Date.now() - this.lastConnectionAttempt > this.connectionCooldown) {
+          
+          // Check if we should disable auto-reconnect
+          if (this.connectionAttempts >= this.maxConnectionAttempts) {
+            if (!this.isConnectionDisabled) {
+              console.error(`[RealtimeClient] ⛔ Max connection attempts (${this.maxConnectionAttempts}) reached. Disabling auto-reconnect.`);
+              this.isConnectionDisabled = true;
+              // Disable auto-reconnect in the client
+              if (this.client) {
+                try {
+                  // Disconnect the client to stop auto-reconnect
+                  this.client.disconnect();
+                } catch (error) {
+                  // Ignore errors when disconnecting
+                }
+              }
+              // Reset after a longer cooldown (5 minutes)
+              setTimeout(() => {
+                this.connectionAttempts = 0;
+                this.isConnectionDisabled = false;
+                this.lastConnectionAttempt = 0;
+                console.log('[RealtimeClient] 🔄 Connection attempts reset. Auto-reconnect re-enabled.');
+              }, 5 * 60 * 1000);
+            }
+            // Don't log every disconnect when disabled to avoid spam
+            return;
+          }
+          
+          // Only log disconnect if it's been a while since last attempt (throttle logging)
+          const timeSinceLastAttempt = Date.now() - this.lastConnectionAttempt;
+          if (timeSinceLastAttempt > this.connectionCooldown || this.lastConnectionAttempt === 0) {
             console.warn(`[RealtimeClient] ❌ Disconnected (attempt ${this.connectionAttempts}/${this.maxConnectionAttempts})`);
           }
         }
@@ -178,8 +207,10 @@ class PolymarketRealtimeAdapter {
         if (status !== previousStatus) {
           const statusEmoji = status === ConnectionStatus.CONNECTED ? '✅' : 
                              status === ConnectionStatus.CONNECTING ? '🔄' : '❌';
-          // Only log disconnect if it's been a while since last attempt
-          if (status !== ConnectionStatus.DISCONNECTED || Date.now() - this.lastConnectionAttempt > this.connectionCooldown) {
+          // Only log disconnect if it's been a while since last attempt or if we're not disabled
+          if (status !== ConnectionStatus.DISCONNECTED || 
+              (Date.now() - this.lastConnectionAttempt > this.connectionCooldown && !this.isConnectionDisabled) ||
+              this.lastConnectionAttempt === 0) {
             console.log(`[RealtimeClient] ${statusEmoji} Status: ${status}`);
           }
         }

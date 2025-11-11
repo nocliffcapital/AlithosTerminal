@@ -113,28 +113,7 @@ function WatchlistCardComponent({ marketIds: propMarketIds }: WatchlistCardProps
   const extractOptionName = useCallback((question: string, eventTitle?: string): string => {
     if (!question) return '';
     
-    // First, try to extract name from common patterns - prioritize this over date/price extraction
-    // Pattern: "Will [NAME] win [EVENT]?" - extract NAME
-    const winPattern = /^Will\s+([^?]+?)\s+win\s+(.+?)\?$/i;
-    const winMatch = question.match(winPattern);
-    if (winMatch && winMatch.length >= 2) {
-      const name = winMatch[1].trim();
-      // Don't return if it's just a year (4 digits)
-      if (!/^\d{4}$/.test(name)) {
-        return name;
-      }
-    }
-    
-    // Pattern: "Will [NAME] be [EVENT]?" - extract NAME
-    const bePattern = /^Will\s+([^?]+?)\s+be\s+(.+?)\?$/i;
-    const beMatch = question.match(bePattern);
-    if (beMatch && beMatch.length >= 2) {
-      const name = beMatch[1].trim();
-      // Don't return if it's just a year (4 digits)
-      if (!/^\d{4}$/.test(name)) {
-        return name;
-      }
-    }
+    // No pattern matching - use simpler extraction methods
     
     // If we have an event title, try to extract what's unique about this market
     if (eventTitle) {

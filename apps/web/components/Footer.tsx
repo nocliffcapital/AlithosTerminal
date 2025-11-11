@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Github } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Github, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { XLogo } from './XLogo';
 
@@ -106,8 +106,15 @@ export function Footer() {
         />
       </div>
 
-      {/* Right: Social Links */}
+      {/* Right: Social Links & Docs */}
       <div className="flex items-center gap-3">
+        <Link
+          href="/docs"
+          className="text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="View Documentation"
+        >
+          <BookOpen className="h-4 w-4" />
+        </Link>
         <Link
           href="https://x.com/alithosterminal"
           target="_blank"

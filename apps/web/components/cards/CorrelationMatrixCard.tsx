@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Search, Check, ChevronDown, Calendar } from 'lucide-react';
+import { Search, Check, ChevronDown, Calendar, AlertCircle, RefreshCw } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -79,57 +79,140 @@ function CorrelationMatrixCardComponent() {
   };
 
   // Fetch historical prices for each selected market
-  // We'll fetch them individually and combine the results
   const hoursForRange = getHoursForRange(timeRange);
   
-  // Create a component to fetch historical data for a single market
-  const HistoricalDataFetcher = ({ marketId, onData, onLoading }: { marketId: string; onData: (data: any[]) => void; onLoading: (loading: boolean) => void }) => {
-    const { data, isLoading } = useHistoricalPrices(marketId, hoursForRange);
-    useEffect(() => {
-      onData(data || []);
-    }, [data, onData]);
-    useEffect(() => {
-      onLoading(isLoading);
-    }, [isLoading, onLoading]);
-    return null;
-  };
-
-  // Store historical data in state
+  // Store historical data in state (fetched via useEffect to avoid hooks in loops)
   const [historicalDataMap, setHistoricalDataMap] = useState<Map<string, any[]>>(new Map());
   const [loadingMap, setLoadingMap] = useState<Map<string, boolean>>(new Map());
+  const [errorMap, setErrorMap] = useState<Map<string, boolean>>(new Map());
 
-  // Update historical data map when markets change
+  // Fetch historical data for each selected market
+  // We'll use a custom hook pattern that works with dynamic lists
   useEffect(() => {
-    const newMap = new Map<string, any[]>();
+    if (selectedMarkets.length === 0) {
+      setHistoricalDataMap(new Map());
+      setLoadingMap(new Map());
+      setErrorMap(new Map());
+      return;
+    }
+
+    // Reset maps for new markets
+    const newDataMap = new Map<string, any[]>();
     const newLoadingMap = new Map<string, boolean>();
+    const newErrorMap = new Map<string, boolean>();
+    
     selectedMarkets.forEach((marketId) => {
-      newMap.set(marketId, []);
+      newDataMap.set(marketId, []);
       newLoadingMap.set(marketId, true);
+      newErrorMap.set(marketId, false);
     });
-    setHistoricalDataMap(newMap);
+    
+    setHistoricalDataMap(newDataMap);
     setLoadingMap(newLoadingMap);
-  }, [selectedMarkets, timeRange]);
+    setErrorMap(newErrorMap);
 
-  // Handler to update historical data map
-  const handleHistoricalData = useCallback((marketId: string, data: any[]) => {
-    setHistoricalDataMap((prev) => {
-      const newMap = new Map(prev);
-      newMap.set(marketId, data);
-      return newMap;
+    // Fetch data for each market
+    selectedMarkets.forEach(async (marketId) => {
+      try {
+        setLoadingMap((prev) => {
+          const updated = new Map(prev);
+          updated.set(marketId, true);
+          return updated;
+        });
+        setErrorMap((prev) => {
+          const updated = new Map(prev);
+          updated.set(marketId, false);
+          return updated;
+        });
+
+        // Use the polymarket client directly to fetch historical prices
+        const { polymarketClient } = await import('@/lib/api/polymarket');
+        let interval: string;
+        let fidelity: number | undefined;
+        
+        if (hoursForRange === null) {
+          interval = 'max';
+        } else {
+          const getIntervalForHours = (hours: number): string => {
+            if (hours <= 1) return '1h';
+            if (hours <= 6) return '6h';
+            if (hours <= 24) return '1d';
+            if (hours <= 168) return '1w';
+            if (hours <= 720) return '1m';
+            return 'max';
+          };
+          const getFidelityForHours = (hours: number): number => {
+            if (hours <= 1) return 1;
+            if (hours <= 6) return 5;
+            if (hours <= 24) return 15;
+            if (hours <= 168) return 60;
+            if (hours <= 720) return 240;
+            return 1440;
+          };
+          interval = getIntervalForHours(hoursForRange);
+          fidelity = getFidelityForHours(hoursForRange);
+        }
+
+        const historicalPrices = await polymarketClient.getHistoricalPrices(marketId, interval, fidelity);
+        
+        if (historicalPrices && historicalPrices.length > 0) {
+          const formattedData = historicalPrices.map((item) => ({
+            timestamp: item.timestamp,
+            price: item.price,
+            probability: item.price * 100,
+            noProbability: (1 - item.price) * 100,
+          }));
+
+          setHistoricalDataMap((prev) => {
+            const updated = new Map(prev);
+            updated.set(marketId, formattedData);
+            return updated;
+          });
+        } else {
+          setHistoricalDataMap((prev) => {
+            const updated = new Map(prev);
+            updated.set(marketId, []);
+            return updated;
+          });
+        }
+
+        setLoadingMap((prev) => {
+          const updated = new Map(prev);
+          updated.set(marketId, false);
+          return updated;
+        });
+      } catch (error) {
+        console.error(`[CorrelationMatrixCard] Error fetching historical data for ${marketId}:`, error);
+        setErrorMap((prev) => {
+          const updated = new Map(prev);
+          updated.set(marketId, true);
+          return updated;
+        });
+        setLoadingMap((prev) => {
+          const updated = new Map(prev);
+          updated.set(marketId, false);
+          return updated;
+        });
+        setHistoricalDataMap((prev) => {
+          const updated = new Map(prev);
+          updated.set(marketId, []);
+          return updated;
+        });
+      }
     });
-  }, []);
 
-  // Handler to update loading state
-  const handleLoadingState = useCallback((marketId: string, loading: boolean) => {
-    setLoadingMap((prev) => {
-      const newMap = new Map(prev);
-      newMap.set(marketId, loading);
-      return newMap;
-    });
-  }, []);
+    // Cleanup function to cancel any pending requests
+    return () => {
+      // Cancel any pending async operations if component unmounts
+    };
+  }, [selectedMarkets, hoursForRange, timeRange]);
 
-  // Check if any historical data is loading
+  // Check if any historical data is loading or has errors
   const isLoadingHistorical = Array.from(loadingMap.values()).some((loading) => loading);
+  const hasErrors = Array.from(errorMap.values()).some((hasError) => hasError);
+  const errorMarkets = Array.from(errorMap.entries())
+    .filter(([_, hasError]) => hasError)
+    .map(([marketId]) => marketId);
 
   // Align price series by timestamp and calculate correlations
   const computeCorrelations = useMemo(() => {
@@ -152,51 +235,91 @@ function CorrelationMatrixCardComponent() {
     }
 
     // Align price series by timestamp (find common timestamps)
+    // Use a time window approach: group timestamps within a small window (e.g., 1 minute)
+    const TIME_WINDOW_MS = 60 * 1000; // 1 minute window
+    
+    // Collect all timestamps and create time buckets
     const allTimestamps = new Set<number>();
     historicalData.forEach((h) => {
       h.data.forEach((point: any) => {
-        allTimestamps.add(point.timestamp);
+        if (point && typeof point.timestamp === 'number' && !isNaN(point.timestamp)) {
+          // Round to nearest time window for alignment
+          const bucketTime = Math.floor(point.timestamp / TIME_WINDOW_MS) * TIME_WINDOW_MS;
+          allTimestamps.add(bucketTime);
+        }
       });
     });
 
     // Sort timestamps
     const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
 
+    if (sortedTimestamps.length < 2) {
+      // Not enough data points for correlation
+      return [];
+    }
+
     // Create aligned price arrays for each market
     const alignedPrices = historicalData.map((h) => {
+      // Create a map of timestamp -> price for quick lookup
       const priceMap = new Map<number, number>();
       h.data.forEach((point: any) => {
-        priceMap.set(point.timestamp, point.price || point.probability / 100);
+        if (point && typeof point.timestamp === 'number' && !isNaN(point.timestamp)) {
+          const bucketTime = Math.floor(point.timestamp / TIME_WINDOW_MS) * TIME_WINDOW_MS;
+          const price = point.price ?? (point.probability ? point.probability / 100 : null);
+          if (price !== null && !isNaN(price) && price >= 0 && price <= 1) {
+            // Use the latest price for each bucket if multiple exist
+            if (!priceMap.has(bucketTime) || point.timestamp > (h.data.find((p: any) => {
+              const pBucket = Math.floor(p.timestamp / TIME_WINDOW_MS) * TIME_WINDOW_MS;
+              return pBucket === bucketTime;
+            })?.timestamp || 0)) {
+              priceMap.set(bucketTime, price);
+            }
+          }
+        }
       });
 
-      // Interpolate missing values (use nearest neighbor)
+      // Interpolate missing values (use forward fill - carry last known value forward)
+      let lastPrice = 0.5; // Default fallback
       return sortedTimestamps.map((ts) => {
         if (priceMap.has(ts)) {
-          return priceMap.get(ts)!;
+          lastPrice = priceMap.get(ts)!;
+          return lastPrice;
         }
-        // Find nearest timestamp
-        const nearest = h.data.reduce((closest, point: any) => {
-          const pointTs = point.timestamp;
-          const closestTs = closest ? closest.timestamp : pointTs;
-          return Math.abs(pointTs - ts) < Math.abs(closestTs - ts) ? point : closest;
-        }, null as any);
-        return nearest ? (nearest.price || nearest.probability / 100) : 0.5;
+        // Forward fill: use last known price
+        return lastPrice;
       });
     });
 
-    // Calculate correlations for all pairs
+    // Filter out markets with insufficient data (all zeros or all same value)
+    const validPrices = alignedPrices.filter((prices) => {
+      if (prices.length < 2) return false;
+      const uniqueValues = new Set(prices);
+      return uniqueValues.size > 1; // Need at least 2 different values
+    });
+
+    if (validPrices.length < 2) {
+      return [];
+    }
+
+    // Calculate correlations for all pairs using valid prices
     const pairs: CorrelationPair[] = [];
-    for (let i = 0; i < selectedMarkets.length; i++) {
-      for (let j = i + 1; j < selectedMarkets.length; j++) {
-        const correlation = calculatePearsonCorrelation(
-          alignedPrices[i],
-          alignedPrices[j]
-        );
-        pairs.push({
-          market1: selectedMarkets[i],
-          market2: selectedMarkets[j],
-          correlation,
-        });
+    for (let i = 0; i < validPrices.length; i++) {
+      for (let j = i + 1; j < validPrices.length; j++) {
+        // Ensure both price arrays have the same length
+        const minLength = Math.min(validPrices[i].length, validPrices[j].length);
+        const prices1 = validPrices[i].slice(0, minLength);
+        const prices2 = validPrices[j].slice(0, minLength);
+        
+        const correlation = calculatePearsonCorrelation(prices1, prices2);
+        
+        // Only include if correlation is valid (not NaN)
+        if (!isNaN(correlation) && isFinite(correlation)) {
+          pairs.push({
+            market1: selectedMarkets[i],
+            market2: selectedMarkets[j],
+            correlation,
+          });
+        }
       }
     }
 
@@ -240,16 +363,6 @@ function CorrelationMatrixCardComponent() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Render historical data fetchers */}
-      {selectedMarkets.map((marketId) => (
-        <HistoricalDataFetcher
-          key={`${marketId}-${timeRange}`}
-          marketId={marketId}
-          onData={(data) => handleHistoricalData(marketId, data)}
-          onLoading={(loading) => handleLoadingState(marketId, loading)}
-        />
-      ))}
-      
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {/* Time Range Selector */}
         {selectedMarkets.length >= 2 && (
@@ -374,15 +487,57 @@ function CorrelationMatrixCardComponent() {
               : 'Select one more market to see correlations'}
             className="p-4"
           />
+        ) : hasErrors ? (
+          <div className="flex flex-col items-center justify-center h-full gap-3 p-4 text-center">
+            <AlertCircle className="h-10 w-10 text-destructive/50" />
+            <div className="text-sm font-medium">Error loading historical data</div>
+            <div className="text-xs text-muted-foreground">
+              {errorMarkets.length === 1 
+                ? 'Failed to load data for one market'
+                : `Failed to load data for ${errorMarkets.length} markets`}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Trigger refetch by updating timeRange slightly
+                setTimeRange((prev) => {
+                  // Force re-fetch by toggling timeRange
+                  return prev;
+                });
+                // Reset error state and reload
+                errorMarkets.forEach((marketId) => {
+                  setErrorMap((prev) => {
+                    const updated = new Map(prev);
+                    updated.set(marketId, false);
+                    return updated;
+                  });
+                });
+                // Force re-fetch by updating selectedMarkets (will trigger useEffect)
+                setSelectedMarkets((prev) => [...prev]);
+              }}
+              className="mt-2"
+            >
+              <RefreshCw className="h-3 w-3 mr-2" />
+              Retry
+            </Button>
+          </div>
         ) : isLoadingHistorical || isCalculating ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex flex-col items-center justify-center h-full gap-3 p-4">
             <LoadingSpinner size="sm" text="Loading historical data..." />
+            <div className="text-xs text-muted-foreground text-center">
+              Fetching price history for {selectedMarkets.length} market{selectedMarkets.length !== 1 ? 's' : ''}...
+            </div>
           </div>
         ) : correlations.length === 0 ? (
           <EmptyState
-            icon={Search}
+            icon={AlertCircle}
             title="No correlation data"
-            description="Unable to calculate correlations. Historical data may be insufficient."
+            description={
+              historicalDataMap.size === 0
+                ? "No historical data available. Try selecting different markets or a different time range."
+                : "Unable to calculate correlations. Historical data may be insufficient or markets may have no price variation."
+            }
             className="p-4"
           />
         ) : (
@@ -466,4 +621,5 @@ function CorrelationMatrixCardComponent() {
 
 // Memoize component to prevent unnecessary re-renders
 export const CorrelationMatrixCard = React.memo(CorrelationMatrixCardComponent);
+
 

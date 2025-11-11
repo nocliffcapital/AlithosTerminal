@@ -8,7 +8,7 @@ import { useAlertHistory } from '@/lib/hooks/useAlertHistory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, Bell, Loader2, History, Play, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Bell, Loader2, History, Play, CheckCircle2, XCircle, Sparkles, Search } from 'lucide-react';
 import { MarketSelector } from '@/components/MarketSelector';
 import { useMarketStore } from '@/stores/market-store';
 import { useToast } from '@/components/Toast';
@@ -250,13 +250,16 @@ function AlertCardComponent() {
           <div>
             <Label>Market (optional)</Label>
             <div className="flex items-center gap-2 mt-1">
-              <Input
-                placeholder="Select market (optional for global alerts)"
-                value={newAlert.marketId ? getMarket(newAlert.marketId)?.question || newAlert.marketId : ''}
-                readOnly
-                onClick={() => setShowMarketSelector(true)}
-                className="flex-1 text-xs cursor-pointer"
-              />
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Select market (optional for global alerts)"
+                  value={newAlert.marketId ? getMarket(newAlert.marketId)?.question || newAlert.marketId : ''}
+                  readOnly
+                  onClick={() => setShowMarketSelector(true)}
+                  className="flex-1 text-xs cursor-pointer pl-8"
+                />
+              </div>
               {newAlert.marketId && (
                 <button
                   onClick={() => setNewAlert({ ...newAlert, marketId: undefined })}

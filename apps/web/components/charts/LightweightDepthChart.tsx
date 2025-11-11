@@ -86,11 +86,22 @@ export function LightweightDepthChart({
 
   // Create/update series when data changes
   useEffect(() => {
-    if (!chartRef.current || !isReady || !data || data.length === 0) return;
+    if (!chartRef.current || !isReady || !data || data.length === 0) {
+      // Clear series if no data
+      if (bidSeriesRef.current) {
+        bidSeriesRef.current.setData([]);
+      }
+      if (askSeriesRef.current) {
+        askSeriesRef.current.setData([]);
+      }
+      return;
+    }
 
-    // Separate bids and asks
-    const bids = data.filter(d => d.side === 'bid').sort((a, b) => b.price - a.price);
-    const asks = data.filter(d => d.side === 'ask').sort((a, b) => a.price - b.price);
+    // Separate bids and asks (data should already be sorted, but ensure it)
+    const bids = data.filter(d => d.side === 'bid' && d.price && !isNaN(d.price) && d.cumulative && !isNaN(d.cumulative))
+      .sort((a, b) => a.price - b.price); // Sort ascending for visualization (lowest to highest)
+    const asks = data.filter(d => d.side === 'ask' && d.price && !isNaN(d.price) && d.cumulative && !isNaN(d.cumulative))
+      .sort((a, b) => a.price - b.price); // Sort ascending (lowest to highest)
 
     // Create bid series (green)
     if (!bidSeriesRef.current) {
@@ -127,37 +138,59 @@ export function LightweightDepthChart({
     // Since Lightweight Charts doesn't support custom X-axis values directly,
     // we'll use a workaround: create a time-based index and map prices
     
-    // Find price range
-    const allPrices = data.map(d => d.price);
+    // Find price range (use all prices from both bids and asks)
+    const allPrices = [...bids.map(d => d.price), ...asks.map(d => d.price)];
+    if (allPrices.length === 0) {
+      // No valid prices, clear series
+      if (bidSeriesRef.current) {
+        bidSeriesRef.current.setData([]);
+      }
+      if (askSeriesRef.current) {
+        askSeriesRef.current.setData([]);
+      }
+      return;
+    }
+    
     const minPrice = Math.min(...allPrices);
     const maxPrice = Math.max(...allPrices);
     const priceRange = maxPrice - minPrice;
+    
+    // Avoid division by zero
+    if (priceRange === 0 || isNaN(priceRange)) {
+      if (bidSeriesRef.current) {
+        bidSeriesRef.current.setData([]);
+      }
+      if (askSeriesRef.current) {
+        askSeriesRef.current.setData([]);
+      }
+      return;
+    }
     
     // Create a base timestamp (we'll use this as a reference point)
     const baseTime = Date.now() / 1000;
     
     // Convert bids to chart data
-    const bidData = bids.map((bid, index) => {
+    const bidData = bids.map((bid) => {
       // Map price to a time value (normalized 0-1, then scaled to a reasonable time range)
       const priceRatio = (bid.price - minPrice) / priceRange;
       const time = baseTime + priceRatio * 86400; // Spread over 1 day in seconds
       return {
         time: time as Time,
-        value: bid.cumulative,
+        value: bid.cumulative || 0,
         color: chartColors.depthBid,
       };
-    });
+    }).filter(d => d.value > 0); // Filter out zero values
 
     // Convert asks to chart data
-    const askData = asks.map((ask, index) => {
+    const askData = asks.map((ask) => {
       const priceRatio = (ask.price - minPrice) / priceRange;
       const time = baseTime + priceRatio * 86400;
       return {
         time: time as Time,
-        value: ask.cumulative,
+        value: ask.cumulative || 0,
         color: chartColors.depthAsk,
       };
-    });
+    }).filter(d => d.value > 0); // Filter out zero values
 
     // Set data
     if (bidSeriesRef.current && bidData.length > 0) {

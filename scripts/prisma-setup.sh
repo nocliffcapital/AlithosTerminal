@@ -7,10 +7,25 @@ echo "🚀 Alithos Terminal Prisma Setup"
 echo "========================="
 echo ""
 
+# Get project root directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WEB_DIR="$PROJECT_ROOT/apps/web"
+
+# Load DATABASE_URL from .env.local if not already set
+if [ -z "$DATABASE_URL" ]; then
+  if [ -f "$WEB_DIR/.env.local" ]; then
+    export DATABASE_URL=$(grep -E "^DATABASE_URL" "$WEB_DIR/.env.local" | cut -d'=' -f2- | tr -d '"')
+    if [ -n "$DATABASE_URL" ]; then
+      echo "✅ DATABASE_URL loaded from .env.local"
+    fi
+  fi
+fi
+
 # Check if DATABASE_URL is set
 if [ -z "$DATABASE_URL" ]; then
-  echo "❌ DATABASE_URL not found in environment variables"
-  echo "📝 Please set DATABASE_URL in your .env.local file"
+  echo "❌ DATABASE_URL not found in environment variables or .env.local"
+  echo "📝 Please set DATABASE_URL in your .env.local file at $WEB_DIR/.env.local"
   echo ""
   echo "Example:"
   echo 'DATABASE_URL="postgresql://user:password@localhost:5432/alithos_terminal?schema=public"'
@@ -28,7 +43,7 @@ if ! command -v npx &> /dev/null; then
 fi
 
 echo "📦 Generating Prisma Client..."
-npx prisma generate
+cd "$(dirname "$0")/.." && npx prisma generate --schema=./prisma/schema.prisma
 
 if [ $? -eq 0 ]; then
   echo "✅ Prisma Client generated successfully"
@@ -39,7 +54,7 @@ fi
 
 echo ""
 echo "🗄️  Running database migrations..."
-npx prisma migrate dev --name init
+cd "$(dirname "$0")/.." && npx prisma migrate dev --schema=./prisma/schema.prisma --name init
 
 if [ $? -eq 0 ]; then
   echo "✅ Database migrations completed successfully"

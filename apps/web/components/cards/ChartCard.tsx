@@ -4,6 +4,7 @@ import React from 'react';
 import { useMarketPrice, useHistoricalPrices, useMarket, useMarkets } from '@/lib/hooks/usePolymarketData';
 import { useRealtimePrice } from '@/lib/hooks/useRealtimePrice';
 import { useMarketStore } from '@/stores/market-store';
+import { DataFreshnessIndicator } from '@/components/DataFreshnessIndicator';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,9 @@ function ChartCardComponent({ marketId: propMarketId, marketIds: propMarketIds, 
   // This ensures hooks are always called in the same order
   const queryClient = useQueryClient(); // Must be called before other hooks
   const { data: currentPrice } = useMarketPrice(chartMarketId || null);
+  
+  // Get data freshness timestamp
+  const dataUpdatedAt = currentPrice?.timestamp ? new Date(currentPrice.timestamp) : undefined;
   
   // Subscribe to real-time price updates for instant price updates (only if we have a market)
   useRealtimePrice(chartMarketId || null, 'YES');
@@ -333,21 +337,7 @@ function ChartCardComponent({ marketId: propMarketId, marketIds: propMarketIds, 
       return priceMatch[1].trim();
     }
     
-    // Pattern: "Will [NAME] win [EVENT]?" - extract NAME
-    const winPattern = /^Will\s+([^?]+?)\s+win\s+(.+?)\?$/i;
-    const winMatch = question.match(winPattern);
-    if (winMatch && winMatch.length >= 2) {
-      return winMatch[1].trim();
-    }
-    
-    // Pattern: "Will [NAME] be [EVENT]?" - extract NAME
-    const bePattern = /^Will\s+([^?]+?)\s+be\s+(.+?)\?$/i;
-    const beMatch = question.match(bePattern);
-    if (beMatch && beMatch.length >= 2) {
-      return beMatch[1].trim();
-    }
-    
-    // Last resort: return everything before the question mark, cleaned up
+    // No pattern matching - return everything before the question mark, cleaned up
     const beforeQuestionMark = question.split('?')[0]?.trim();
     if (beforeQuestionMark && beforeQuestionMark.length < question.length) {
       return beforeQuestionMark;
@@ -967,6 +957,14 @@ function ChartCardComponent({ marketId: propMarketId, marketIds: propMarketIds, 
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-accent/20 flex-shrink-0">
         {/* Left side: Controls and probabilities */}
         <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+          {/* Data Freshness Indicator */}
+          {dataUpdatedAt && (
+            <DataFreshnessIndicator 
+              timestamp={dataUpdatedAt} 
+              thresholdSeconds={30}
+              showAge={true}
+            />
+          )}
           {/* Outcome Selector - only show for single market */}
           {effectiveMarketIds.length === 1 && (
             <DropdownMenu>

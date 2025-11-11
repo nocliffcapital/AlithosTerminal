@@ -2,9 +2,17 @@
 
 import React, { Suspense } from 'react';
 import { CardConfig } from '@/stores/layout-store';
-import { Maximize2, Minimize2, X, Loader2, Settings, Search, Link2 } from 'lucide-react';
+import { Maximize2, Minimize2, X, Loader2, Settings, Search, Link2, Info, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useLayoutStore } from '@/stores/layout-store';
+import { useLayoutStore, CardType } from '@/stores/layout-store';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { MARKET_CARD_TYPES } from '@/components/MarketSelector';
 import { useWorkspaces } from '@/lib/hooks/useWorkspace';
 import { useMarket, useMarkets } from '@/lib/hooks/usePolymarketData';
 import { cn } from '@/lib/utils';
@@ -14,6 +22,7 @@ import { MarketSelector } from '@/components/MarketSelector';
 import { CardTabs } from '@/components/cards/CardTabs';
 import { CardTab } from '@/stores/layout-store';
 import { LinkManager } from '@/components/cards/LinkManager';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Lazy load card components for code splitting
 const WatchlistCard = React.lazy(() => import('@/components/cards/WatchlistCard').then(m => ({ default: m.WatchlistCard })));
@@ -149,8 +158,10 @@ function CardHeader({
 }) {
   const { onSettingsClick } = React.useContext(CardHeaderActionsContext);
   const { marketQuestion, getOnMarketChange } = React.useContext(CardMarketContext);
-  const { getCardLinkGroup } = useLayoutStore();
+  const { getCardLinkGroup, addCard } = useLayoutStore();
   const [showLinkManager, setShowLinkManager] = React.useState(false);
+  const [showMoreCardsDropdown, setShowMoreCardsDropdown] = React.useState(false);
+  const [recentlySelectedMarketId, setRecentlySelectedMarketId] = React.useState<string | null>(null);
   
   const linkGroup = getCardLinkGroup(card.id);
   
@@ -160,6 +171,11 @@ function CardHeader({
   const tabs = card.tabs || [];
   const hasTabs = tabs.length > 1;
 
+  // Filter out current card type from available card types
+  const availableCardTypes = React.useMemo(() => {
+    return MARKET_CARD_TYPES.filter(({ type }) => type !== card.type);
+  }, [card.type]);
+
   const handleMarketSelect = React.useCallback((marketId: string | null) => {
     // Get handler at call time to ensure we have the latest
     const onMarketChange = getOnMarketChange?.();
@@ -167,7 +183,31 @@ function CardHeader({
       onMarketChange(marketId);
     }
     setShowMarketSelector(false);
-  }, [getOnMarketChange, setShowMarketSelector]);
+    
+    // If market was selected and this is a single-market card, show "Show more cards?" dropdown
+    if (marketId && isSingleMarketCard && availableCardTypes.length > 0) {
+      setRecentlySelectedMarketId(marketId);
+      setShowMoreCardsDropdown(true);
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        setShowMoreCardsDropdown(false);
+        setRecentlySelectedMarketId(null);
+      }, 5000);
+    }
+  }, [getOnMarketChange, setShowMarketSelector, isSingleMarketCard, availableCardTypes.length]);
+
+  const handleAddMoreCard = React.useCallback((cardType: string) => {
+    if (!recentlySelectedMarketId) return;
+    
+    addCard({
+      id: `${cardType}-${Date.now()}-${Math.random()}`,
+      type: cardType as CardType,
+      props: { marketId: recentlySelectedMarketId },
+    });
+    
+    setShowMoreCardsDropdown(false);
+    setRecentlySelectedMarketId(null);
+  }, [addCard, recentlySelectedMarketId]);
 
   const handleTabDragStart = React.useCallback((tabId: string, e: React.DragEvent) => {
     e.dataTransfer.setData('sourceCardId', card.id);
@@ -210,19 +250,102 @@ function CardHeader({
           <h3 className="text-xs font-semibold tracking-tight capitalize flex-shrink-0">
             {card.type === 'tradingview-chart' ? 'TradingView Chart' : card.type.replace(/-/g, ' ')}
           </h3>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="p-0.5 hover:bg-accent/60 rounded transition-colors flex-shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="max-w-xs">
+                  {card.type === 'watchlist' && 'View and manage your watchlist of markets'}
+                  {card.type === 'tape' && 'Real-time market activity and trades'}
+                  {card.type === 'quick-ticket' && 'Quick order entry for fast trading'}
+                  {card.type === 'order-creator' && 'Create and manage trading orders'}
+                  {card.type === 'depth' && 'Market depth and order book visualization'}
+                  {card.type === 'orderbook' && 'View the order book for a market'}
+                  {card.type === 'scenario-builder' && 'Build and analyze trading scenarios'}
+                  {card.type === 'exposure-tree' && 'Visualize your position exposure across markets'}
+                  {card.type === 'activity-scanner' && 'Scan for market activity and opportunities'}
+                  {card.type === 'resolution-criteria' && 'View resolution criteria for a market'}
+                  {card.type === 'chart' && 'Price charts and technical analysis'}
+                  {card.type === 'tradingview-chart' && 'Advanced TradingView charts'}
+                  {card.type === 'correlation-matrix' && 'Analyze correlations between markets'}
+                  {card.type === 'market-discovery' && 'Discover and explore markets'}
+                  {card.type === 'market-info' && 'Detailed information about a market'}
+                  {card.type === 'market-research' && 'AI-powered market research and analysis'}
+                  {card.type === 'news' && 'News and updates related to markets'}
+                  {card.type === 'positions' && 'View your current positions and P&L'}
+                  {card.type === 'transaction-history' && 'History of your transactions'}
+                  {card.type === 'order-history' && 'History of your orders'}
+                  {card.type === 'journal' && 'Trading journal and notes'}
+                  {card.type === 'comments' && 'Comments and discussions about markets'}
+                  {card.type === 'kelly-calculator' && 'Kelly Criterion position sizing calculator'}
+                  {card.type === 'position-sizing' && 'Calculate optimal position sizes'}
+                  {card.type === 'price-converter' && 'Convert between price formats'}
+                  {card.type === 'market-trade' && 'Trade a specific market'}
+                  {!['watchlist', 'tape', 'quick-ticket', 'order-creator', 'depth', 'orderbook', 'scenario-builder', 'exposure-tree', 'activity-scanner', 'resolution-criteria', 'chart', 'tradingview-chart', 'correlation-matrix', 'market-discovery', 'market-info', 'market-research', 'news', 'positions', 'transaction-history', 'order-history', 'journal', 'comments', 'kelly-calculator', 'position-sizing', 'price-converter', 'market-trade'].includes(card.type) && 'Card information'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {isSingleMarketCard && !hasTabs && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMarketSelector(true);
-              }}
-              className="p-1 hover:bg-accent/60 rounded-md transition-colors flex-shrink-0"
-              title="Select market"
-              aria-label="Select market"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <Search className="h-3 w-3 text-muted-foreground" />
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMarketSelector(true);
+                }}
+                className="p-1 hover:bg-accent/60 rounded-md transition-colors flex-shrink-0"
+                title="Select market"
+                aria-label="Select market"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <Search className="h-3 w-3 text-muted-foreground" />
+              </button>
+              {showMoreCardsDropdown && recentlySelectedMarketId && availableCardTypes.length > 0 && (
+                <DropdownMenu open={showMoreCardsDropdown} onOpenChange={setShowMoreCardsDropdown}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMoreCardsDropdown(true);
+                      }}
+                      className="p-1 hover:bg-accent/60 rounded-md transition-colors flex-shrink-0"
+                      title="Show more cards"
+                      aria-label="Show more cards"
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      <Plus className="h-3 w-3 text-primary" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                      Show more cards?
+                    </div>
+                    <DropdownMenuSeparator />
+                    {availableCardTypes.map(({ type, label, icon: Icon }) => (
+                      <DropdownMenuItem
+                        key={type}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddMoreCard(type);
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <Icon className="h-4 w-4 mr-2" />
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </>
           )}
           {showMarketInfo && !hasTabs && (
             <>
@@ -336,6 +459,7 @@ function CardHeader({
           open={showMarketSelector}
           onOpenChange={setShowMarketSelector}
           onSelect={handleMarketSelect}
+          currentCardType={card.type}
         />
       )}
       <LinkManager
@@ -737,21 +861,7 @@ function CardContent({
       return priceMatch[1].trim();
     }
     
-    // Pattern: "Will [NAME] win [EVENT]?" - extract NAME
-    const winPattern = /^Will\s+([^?]+?)\s+win\s+(.+?)\?$/i;
-    const winMatch = question.match(winPattern);
-    if (winMatch && winMatch.length >= 2) {
-      return winMatch[1].trim();
-    }
-    
-    // Pattern: "Will [NAME] be [EVENT]?" - extract NAME
-    const bePattern = /^Will\s+([^?]+?)\s+be\s+(.+?)\?$/i;
-    const beMatch = question.match(bePattern);
-    if (beMatch && beMatch.length >= 2) {
-      return beMatch[1].trim();
-    }
-    
-    // Last resort: return everything before the question mark, cleaned up
+    // No pattern matching - return everything before the question mark, cleaned up
     const beforeQuestionMark = question.split('?')[0]?.trim();
     if (beforeQuestionMark && beforeQuestionMark.length < question.length) {
       return beforeQuestionMark;

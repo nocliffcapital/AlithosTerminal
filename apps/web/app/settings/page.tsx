@@ -11,7 +11,7 @@ import { TeamManagement } from '@/components/settings/TeamManagement';
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'theme' | 'alerts' | 'notifications' | 'teams'>('theme');
+  const [activeTab, setActiveTab] = useState<'theme' | 'alerts' | 'notifications' | 'teams'>('alerts');
 
   const tabs = [
     { id: 'alerts' as const, label: 'Alerts & Automation', icon: Bell },

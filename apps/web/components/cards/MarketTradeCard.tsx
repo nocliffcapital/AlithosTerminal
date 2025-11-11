@@ -173,21 +173,7 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
       return priceMatch[1].trim();
     }
     
-    // Pattern: "Will [NAME] win [EVENT]?" - extract NAME
-    const winPattern = /^Will\s+([^?]+?)\s+win\s+(.+?)\?$/i;
-    const winMatch = question.match(winPattern);
-    if (winMatch && winMatch.length >= 2) {
-      return winMatch[1].trim();
-    }
-    
-    // Pattern: "Will [NAME] be [EVENT]?" - extract NAME
-    const bePattern = /^Will\s+([^?]+?)\s+be\s+(.+?)\?$/i;
-    const beMatch = question.match(bePattern);
-    if (beMatch && beMatch.length >= 2) {
-      return beMatch[1].trim();
-    }
-    
-    // Last resort: return everything before the question mark, cleaned up
+    // No pattern matching - return everything before the question mark, cleaned up
     const beforeQuestionMark = question.split('?')[0]?.trim();
     if (beforeQuestionMark && beforeQuestionMark.length < question.length) {
       return beforeQuestionMark;
@@ -232,115 +218,8 @@ function MarketTradeCardComponent({ marketId: propMarketId, onMarketChange }: Ma
       }
     }
     
-    // Fallback: Group by pattern matching
-    // Extract the event part from the question
-    const question = market.question || '';
-    
-    // Pattern: "Will [NAME] win [EVENT]?"
-    const winPattern = /^Will\s+([^?]+?)\s+win\s+(.+?)\?$/i;
-    // Pattern: "Will [NAME] be [EVENT]?"
-    const bePattern = /^Will\s+([^?]+?)\s+be\s+(.+?)\?$/i;
-    // Pattern: "Will [NAME] become [EVENT]?"
-    const becomePattern = /^Will\s+([^?]+?)\s+become\s+(.+?)\?$/i;
-    // Pattern: "[NAME] out as [ROLE] in [YEAR]?" (e.g., "Tim Cook out as Apple CEO in 2025?")
-    const outAsPattern = /^(.+?)\s+out\s+as\s+(.+?)\s+in\s+(\d{4})\?$/i;
-    // Pattern: "[NAME] out by [DATE]?" (e.g., "Macron out by...?")
-    const outByPattern = /^(.+?)\s+out\s+by\s+(.+?)\?$/i;
-    
-    let match = question.match(winPattern);
-    let eventPart = '';
-    let patternType = '';
-    
-    if (match) {
-      patternType = 'win';
-      eventPart = match[2].trim();
-    } else {
-      match = question.match(bePattern);
-      if (match) {
-        patternType = 'be';
-        eventPart = match[2].trim();
-      }
-    }
-    
-    if (!match) {
-      match = question.match(becomePattern);
-      if (match) {
-        patternType = 'become';
-        eventPart = match[2].trim();
-      }
-    }
-    
-    if (!match) {
-      match = question.match(outAsPattern);
-      if (match) {
-        // For "out as" pattern, extract role and year as event part
-        eventPart = `${match[2].trim()} in ${match[3]}`;
-        patternType = 'outAs';
-      }
-    }
-    
-    if (!match) {
-      match = question.match(outByPattern);
-      if (match) {
-        // For "out by" pattern, extract the date/event part
-        eventPart = match[2].trim();
-        patternType = 'outBy';
-      }
-    }
-    
-    if (match && eventPart) {
-      // Find all markets that match this pattern with the same event part
-      const relatedMarkets = allMarkets.filter(m => {
-        // Filter out markets with 0 volume and 0 liquidity (not visible on Polymarket)
-        const volume = m.volume || 0;
-        const liquidity = m.liquidity || 0;
-        if (volume === 0 && liquidity === 0 && m.id !== market.id) {
-          return false; // Exclude markets with 0 volume/liquidity (except current market)
-        }
-        
-        if (m.id === market.id) return true; // Include current market
-        const mQuestion = m.question || '';
-        
-        // Try matching with the same pattern type
-        let mMatch: RegExpMatchArray | null = null;
-        
-        if (patternType === 'win') {
-          mMatch = mQuestion.match(/^Will\s+([^?]+?)\s+win\s+(.+?)\?$/i);
-          if (mMatch && mMatch.length >= 3) {
-            return mMatch[2].trim() === eventPart;
-          }
-        } else if (patternType === 'be') {
-          mMatch = mQuestion.match(/^Will\s+([^?]+?)\s+be\s+(.+?)\?$/i);
-          if (mMatch && mMatch.length >= 3) {
-            return mMatch[2].trim() === eventPart;
-          }
-        } else if (patternType === 'become') {
-          mMatch = mQuestion.match(/^Will\s+([^?]+?)\s+become\s+(.+?)\?$/i);
-          if (mMatch && mMatch.length >= 3) {
-            return mMatch[2].trim() === eventPart;
-          }
-        } else if (patternType === 'outAs') {
-          mMatch = mQuestion.match(/^(.+?)\s+out\s+as\s+(.+?)\s+in\s+(\d{4})\?$/i);
-          if (mMatch && mMatch.length >= 4) {
-            const mEventPart = `${mMatch[2].trim()} in ${mMatch[3]}`;
-            return mEventPart === eventPart;
-          }
-        } else if (patternType === 'outBy') {
-          mMatch = mQuestion.match(/^(.+?)\s+out\s+by\s+(.+?)\?$/i);
-          if (mMatch && mMatch.length >= 3) {
-            return mMatch[2].trim() === eventPart;
-          }
-        }
-        
-        return false;
-      });
-      
-      if (relatedMarkets.length > 1) {
-        // Sort by volume descending to show most active markets first
-        return relatedMarkets.sort((a, b) => (b.volume || 0) - (a.volume || 0));
-      }
-    }
-    
+    // No fallback pattern matching - only use actual Polymarket grouping (eventId)
+    // Return empty array if no eventId grouping found
     return [];
   }, [hasEventInfo, eventId, allMarkets, market]);
   

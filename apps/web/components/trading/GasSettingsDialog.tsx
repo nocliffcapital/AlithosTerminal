@@ -80,7 +80,7 @@ export function GasSettingsDialog({ open, onOpenChange, currentPriority = 'stand
               </div>
 
               {/* Current Gas Prices */}
-              <div className="p-3 bg-muted rounded space-y-2">
+              <div className="p-3 bg-background rounded space-y-2">
                 <Label className="text-xs font-medium">Current Gas Prices</Label>
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between">

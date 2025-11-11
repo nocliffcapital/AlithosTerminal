@@ -67,3 +67,36 @@ export const getCardCategory = (type: CardType): CardCategory | undefined => {
   return getCardInfo(type)?.category;
 };
 
+// Get card description for tooltips
+export const getCardDescription = (type: CardType): string => {
+  const descriptions: Record<CardType, string> = {
+    'watchlist': 'View and manage your watchlist of markets',
+    'tape': 'Real-time market activity and trades',
+    'quick-ticket': 'Quick order entry for fast trading',
+    'order-creator': 'Create and manage trading orders',
+    'depth': 'Market depth and order book visualization',
+    'orderbook': 'View the order book for a market',
+    'scenario-builder': 'Build and analyze trading scenarios',
+    'exposure-tree': 'Visualize your position exposure across markets',
+    'activity-scanner': 'Scan for market activity and opportunities',
+    'resolution-criteria': 'View resolution criteria for a market',
+    'chart': 'Price charts and technical analysis',
+    'tradingview-chart': 'Advanced TradingView charts',
+    'correlation-matrix': 'Analyze correlations between markets',
+    'market-discovery': 'Discover and explore markets',
+    'market-info': 'Detailed information about a market',
+    'market-research': 'AI-powered market research and analysis',
+    'news': 'News and updates related to markets',
+    'positions': 'View your current positions and P&L',
+    'transaction-history': 'History of your transactions',
+    'order-history': 'History of your orders',
+    'journal': 'Trading journal and notes',
+    'comments': 'Comments and discussions about markets',
+    'kelly-calculator': 'Kelly Criterion position sizing calculator',
+    'position-sizing': 'Calculate optimal position sizes',
+    'price-converter': 'Convert between price formats',
+    'market-trade': 'Trade a specific market',
+  };
+  return descriptions[type] || 'Card information';
+};
+

@@ -4,24 +4,34 @@ import React from 'react';
 import { useMarketStore } from '@/stores/market-store';
 import { useAdjacentNews } from '@/lib/hooks/useAdjacentNews';
 import { useMarket } from '@/lib/hooks/usePolymarketData';
-import { Loader2, ExternalLink, Calendar, User, Search } from 'lucide-react';
-import { useState } from 'react';
+import { Loader2, ExternalLink, Calendar, User, Search, ArrowUpDown, Clock, TrendingUp } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MarketSelector } from '@/components/MarketSelector';
 import { CardMarketContext } from '@/components/layout/Card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 
 interface NewsCardProps {
   marketId?: string;
   onMarketChange?: (marketId: string | null) => void;
 }
 
+type SortOption = 'relevance' | 'recency';
+
 function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardProps = {}) {
   const { getMarket } = useMarketStore();
   const [days, setDays] = useState<number>(7);
   const [limit, setLimit] = useState<number>(10);
   const [showMarketSelector, setShowMarketSelector] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('recency');
   const { setMarketQuestion } = React.useContext(CardMarketContext);
 
   // Use prop marketId if provided, otherwise fall back to selectedMarketId for backward compatibility
@@ -79,6 +89,70 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
     }
   };
 
+  // Normalize title for deduplication (remove extra whitespace, lowercase for comparison)
+  const normalizeTitle = (title: string): string => {
+    return title.toLowerCase().trim().replace(/\s+/g, ' ');
+  };
+
+  // Deduplicate articles by title and group sources
+  const deduplicatedNews = useMemo(() => {
+    if (!newsData?.data || newsData.data.length === 0) return [];
+
+    // Group articles by normalized title
+    const titleGroups = new Map<string, typeof newsData.data>();
+    
+    newsData.data.forEach((article) => {
+      const normalizedTitle = normalizeTitle(article.title);
+      if (!titleGroups.has(normalizedTitle)) {
+        titleGroups.set(normalizedTitle, []);
+      }
+      titleGroups.get(normalizedTitle)!.push(article);
+    });
+
+    // Create deduplicated list with grouped sources
+    const deduplicated: Array<{
+      article: typeof newsData.data[0];
+      sources: typeof newsData.data;
+      sourceCount: number;
+    }> = [];
+
+    titleGroups.forEach((articles) => {
+      // Sort articles by date (newest first) to pick the most recent as primary
+      const sorted = articles.sort((a, b) => {
+        const dateA = new Date(a.publishedDate).getTime();
+        const dateB = new Date(b.publishedDate).getTime();
+        return dateB - dateA;
+      });
+
+      deduplicated.push({
+        article: sorted[0], // Use most recent as primary
+        sources: sorted,
+        sourceCount: sorted.length,
+      });
+    });
+
+    // Sort deduplicated articles
+    const sorted = deduplicated.sort((a, b) => {
+      if (sortBy === 'recency') {
+        // Sort by most recent published date
+        const dateA = new Date(a.article.publishedDate).getTime();
+        const dateB = new Date(b.article.publishedDate).getTime();
+        return dateB - dateA;
+      } else {
+        // Sort by relevance (use source count as proxy, more sources = more relevant)
+        // Then by recency as tiebreaker
+        if (a.sourceCount !== b.sourceCount) {
+          return b.sourceCount - a.sourceCount;
+        }
+        const dateA = new Date(a.article.publishedDate).getTime();
+        const dateB = new Date(b.article.publishedDate).getTime();
+        return dateB - dateA;
+      }
+    });
+
+    return sorted;
+  }, [newsData?.data, sortBy]);
+
   if (!effectiveMarketId || !displayMarket) {
     return (
       <>
@@ -107,7 +181,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-accent/20">
+      <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-accent/20 space-y-2">
         {/* Controls */}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 items-stretch sm:items-center">
           <div className="flex items-center gap-2 flex-1">
@@ -143,6 +217,47 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
               <option value="50">50</option>
             </select>
           </div>
+        </div>
+
+        {/* Sort Control */}
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
+            Sort by:
+          </label>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="text-[10px] sm:text-xs h-6 px-2">
+                {sortBy === 'recency' ? (
+                  <>
+                    <Clock className="h-3 w-3 mr-1" />
+                    Recency
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                    Relevance
+                  </>
+                )}
+                <ArrowUpDown className="h-3 w-3 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-32">
+              <DropdownMenuItem
+                onClick={() => setSortBy('recency')}
+                className={cn(sortBy === 'recency' && 'bg-accent')}
+              >
+                <Clock className="h-3 w-3 mr-2" />
+                <span className="text-xs">Recency</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setSortBy('relevance')}
+                className={cn(sortBy === 'relevance' && 'bg-accent')}
+              >
+                <TrendingUp className="h-3 w-3 mr-2" />
+                <span className="text-xs">Relevance</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -183,7 +298,7 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
             )}
           </div>
         ) : (
-          newsData.data.map((article) => (
+          deduplicatedNews.map(({ article, sourceCount }) => (
             <div
               key={article.url}
               className="py-2 border-b border-border/30 last:border-b-0 hover:bg-accent/10 transition-colors duration-200"
@@ -231,6 +346,13 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
                   </div>
                 )}
 
+                {/* Multiple Sources Indicator */}
+                {sourceCount > 1 && (
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-semibold">
+                    {sourceCount - 1} more source{sourceCount - 1 !== 1 ? 's' : ''}
+                  </div>
+                )}
+
                 {/* Link */}
                 <a
                   href={article.url}
@@ -249,7 +371,12 @@ function NewsCardComponent({ marketId: propMarketId, onMarketChange }: NewsCardP
         {/* Meta Information */}
         {newsData?.meta && newsData.meta.totalResults !== undefined && (
           <div className="text-[10px] sm:text-xs text-muted-foreground/70 text-center pt-2 border-t border-border/50">
-            {newsData.meta.totalResults} {newsData.meta.totalResults === 1 ? 'article' : 'articles'} found
+            {deduplicatedNews.length} unique {deduplicatedNews.length === 1 ? 'article' : 'articles'} 
+            {newsData.meta.totalResults !== deduplicatedNews.length && (
+              <span className="ml-1">
+                (from {newsData.meta.totalResults} total {newsData.meta.totalResults === 1 ? 'source' : 'sources'})
+              </span>
+            )}
             {newsData.meta.searchMethod && (
               <span className="ml-2">
                 (via {newsData.meta.searchMethod === 'neural' ? 'neural search' : 'fallback search'})

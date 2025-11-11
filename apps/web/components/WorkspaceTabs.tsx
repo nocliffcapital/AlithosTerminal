@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useWorkspaces, useUpdateWorkspace, useCreateWorkspace } from '@/lib/hooks/useWorkspace';
 import { useLayoutStore } from '@/stores/layout-store';
-import { X, Lock, Unlock, Plus } from 'lucide-react';
+import { X, Lock, Unlock, Plus, LineChart, LayoutGrid } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -162,20 +162,29 @@ export function WorkspaceTabs() {
   const handleRemoveTab = (workspaceId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
+    // Prevent hiding TRADING workspaces
+    const workspace = workspaces.find((w: any) => w.id === workspaceId);
+    if (workspace?.type === 'TRADING') {
+      return;
+    }
+    
     // Prevent hiding the last visible tab - always keep at least one tab visible
     const wouldBeVisible = workspaces.filter(
-      (w: any) => !hiddenTabs.has(w.id) && w.id !== workspaceId
+      (w: any) => !hiddenTabs.has(w.id) && w.id !== workspaceId && w.type !== 'TRADING'
     );
     
-    // Don't allow hiding if it would leave no tabs visible
-    if (wouldBeVisible.length === 0) {
+    // Don't allow hiding if it would leave no tabs visible (excluding TRADING which is always visible)
+    if (wouldBeVisible.length === 0 && workspaces.filter((w: any) => w.type === 'TRADING').length === 0) {
       return;
     }
     
     setHiddenTabs((prev) => new Set([...prev, workspaceId]));
-    // If removing the active tab, switch to first visible workspace
+    // If removing the active tab, switch to first visible workspace (prefer TRADING if exists)
     if (workspaceId === currentWorkspaceId) {
-      if (wouldBeVisible.length > 0) {
+      const tradingWorkspace = workspaces.find((w: any) => w.type === 'TRADING');
+      if (tradingWorkspace) {
+        setCurrentWorkspace(tradingWorkspace.id);
+      } else if (wouldBeVisible.length > 0) {
         setCurrentWorkspace(wouldBeVisible[0].id);
       }
     }
@@ -231,20 +240,37 @@ export function WorkspaceTabs() {
   // Get hidden workspaces that can be added back
   const hiddenWorkspaces = workspaces.filter((w: any) => hiddenTabs.has(w.id));
 
-  // Ensure current workspace is always visible - remove it from hidden tabs if present
+  // Ensure current workspace and TRADING workspaces are always visible - remove them from hidden tabs if present
   useEffect(() => {
-    if (currentWorkspaceId && hiddenTabs.has(currentWorkspaceId)) {
-      setHiddenTabs((prev) => {
-        const newSet = new Set(prev);
+    setHiddenTabs((prev) => {
+      const newSet = new Set(prev);
+      let changed = false;
+      
+      // Remove current workspace from hidden tabs
+      if (currentWorkspaceId && newSet.has(currentWorkspaceId)) {
         newSet.delete(currentWorkspaceId);
-        return newSet;
+        changed = true;
+      }
+      
+      // Remove all TRADING workspaces from hidden tabs (they cannot be hidden)
+      workspaces.forEach((w: any) => {
+        if (w.type === 'TRADING' && newSet.has(w.id)) {
+          newSet.delete(w.id);
+          changed = true;
+        }
       });
-    }
+      
+      return changed ? newSet : prev;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWorkspaceId]);
+  }, [currentWorkspaceId, workspaces]);
 
-  // Filter out hidden workspaces, but always include the current workspace
+  // Filter out hidden workspaces, but always include the current workspace and TRADING workspaces
   let visibleWorkspaces = workspaces.filter((w: any) => {
+    // Always show TRADING workspaces (they cannot be hidden)
+    if (w.type === 'TRADING') {
+      return true;
+    }
     // Always show the current workspace
     if (w.id === currentWorkspaceId) {
       return true;
@@ -253,27 +279,34 @@ export function WorkspaceTabs() {
     return !hiddenTabs.has(w.id);
   });
   
-  // Apply custom tab order if available
+  // Sort workspaces: TRADING type always first, then apply custom tab order
+  const tradingWorkspaces = visibleWorkspaces.filter((w: any) => w.type === 'TRADING');
+  const otherWorkspaces = visibleWorkspaces.filter((w: any) => w.type !== 'TRADING');
+  
+  // Apply custom tab order to non-TRADING workspaces if available
   if (tabOrder.length > 0) {
     const orderedWorkspaces: any[] = [];
     const unorderedWorkspaces: any[] = [];
     
-    // Add workspaces in the order specified by tabOrder
+    // Add workspaces in the order specified by tabOrder (excluding TRADING)
     tabOrder.forEach((workspaceId) => {
-      const workspace = visibleWorkspaces.find((w: any) => w.id === workspaceId);
+      const workspace = otherWorkspaces.find((w: any) => w.id === workspaceId);
       if (workspace) {
         orderedWorkspaces.push(workspace);
       }
     });
     
-    // Add any workspaces not in the order (new workspaces)
-    visibleWorkspaces.forEach((workspace: any) => {
+    // Add any workspaces not in the order (new workspaces, excluding TRADING)
+    otherWorkspaces.forEach((workspace: any) => {
       if (!tabOrder.includes(workspace.id)) {
         unorderedWorkspaces.push(workspace);
       }
     });
     
-    visibleWorkspaces = [...orderedWorkspaces, ...unorderedWorkspaces];
+    visibleWorkspaces = [...tradingWorkspaces, ...orderedWorkspaces, ...unorderedWorkspaces];
+  } else {
+    // No custom order: just put TRADING first
+    visibleWorkspaces = [...tradingWorkspaces, ...otherWorkspaces];
   }
   
   // If all tabs would be hidden, show at least the first workspace or current workspace
@@ -286,6 +319,13 @@ export function WorkspaceTabs() {
 
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, workspaceId: string) => {
+    // Prevent dragging TRADING workspaces
+    const workspace = workspaces.find((w: any) => w.id === workspaceId);
+    if (workspace?.type === 'TRADING') {
+      e.preventDefault();
+      return;
+    }
+    
     setDraggedTabId(workspaceId);
     (window as any)._lastDragStart = Date.now();
     e.dataTransfer.effectAllowed = 'move';
@@ -345,7 +385,21 @@ export function WorkspaceTabs() {
       return;
     }
 
-    const currentOrder = tabOrder.length > 0 ? [...tabOrder] : visibleWorkspaces.map((w: any) => w.id);
+    // Prevent reordering TRADING workspaces
+    const draggedWorkspace = workspaces.find((w: any) => w.id === draggedTabId);
+    const targetWorkspace = workspaces.find((w: any) => w.id === targetWorkspaceId);
+    if (draggedWorkspace?.type === 'TRADING' || targetWorkspace?.type === 'TRADING') {
+      setDraggedTabId(null);
+      setDragOverTabId(null);
+      return;
+    }
+
+    // Get current order excluding TRADING workspaces (they stay at the beginning)
+    const nonTradingWorkspaces = visibleWorkspaces.filter((w: any) => w.type !== 'TRADING');
+    const currentOrder = tabOrder.length > 0 
+      ? tabOrder.filter((id) => !workspaces.find((w: any) => w.id === id && w.type === 'TRADING'))
+      : nonTradingWorkspaces.map((w: any) => w.id);
+    
     const draggedIndex = currentOrder.indexOf(draggedTabId);
     const targetIndex = currentOrder.indexOf(targetWorkspaceId);
 
@@ -371,8 +425,8 @@ export function WorkspaceTabs() {
     
     newOrder.splice(newTargetIndex, 0, draggedTabId);
 
-    // Add any missing workspace IDs
-    visibleWorkspaces.forEach((w: any) => {
+    // Add any missing non-TRADING workspace IDs
+    nonTradingWorkspaces.forEach((w: any) => {
       if (!newOrder.includes(w.id)) {
         newOrder.push(w.id);
       }
@@ -478,7 +532,7 @@ export function WorkspaceTabs() {
 
   return (
     <div className="border-b border-border bg-background/95 backdrop-blur-sm relative z-20">
-      <div className="flex items-end gap-0 px-2 py-0 overflow-x-auto scrollbar-hide min-h-[44px]">
+      <div className="flex items-end gap-0 pr-2 py-0 overflow-x-auto scrollbar-hide min-h-[44px]">
         {hasWorkspaces ? (
           visibleWorkspaces.map((workspace: any, index: number) => {
             const isActive = workspace.id === currentWorkspaceId;
@@ -523,7 +577,7 @@ export function WorkspaceTabs() {
               <ContextMenu key={workspace.id}>
                 <ContextMenuTrigger asChild>
                   <div
-                    draggable={editingTabId !== workspace.id}
+                    draggable={editingTabId !== workspace.id && workspace.type !== 'TRADING'}
                     onDragStart={(e) => handleDragStart(e, workspace.id)}
                     onDragOver={(e) => handleDragOver(e, workspace.id)}
                     onDragLeave={(e) => handleDragLeave(e, workspace.id)}
@@ -536,9 +590,9 @@ export function WorkspaceTabs() {
                       position: 'relative' as const,
                     }}
                     className={`
-                      flex items-center justify-between gap-2 px-4 py-3 transition-all duration-200 group relative
+                      flex items-center justify-between gap-2 ${isFirst ? 'pl-4 pr-4' : 'px-4'} py-3 transition-all duration-200 group relative
                       min-w-[180px] h-[44px]
-                      ${editingTabId === workspace.id ? 'cursor-default' : 'cursor-move'}
+                      ${editingTabId === workspace.id ? 'cursor-default' : workspace.type === 'TRADING' ? 'cursor-default' : 'cursor-move'}
                       ${isDragged ? 'opacity-50 z-50' : ''}
                       ${isDragOver && !isDragged ? 'ring-2 ring-primary/50' : ''}
                       ${editingTabId === workspace.id 
@@ -623,10 +677,15 @@ export function WorkspaceTabs() {
                     className="text-xs whitespace-nowrap truncate flex-1 min-w-0 text-left flex items-center gap-1.5"
                     onDoubleClick={(e) => handleDoubleClick(e, workspace.id, workspace.name)}
                   >
+                    {workspace.type === 'TRADING' ? (
+                      <LineChart className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    ) : (
+                      <LayoutGrid className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    )}
                     <span className={isActive ? 'font-semibold' : 'font-normal'}>{workspace.name}</span>
                   </span>
                 )}
-                {canRemoveTab && (
+                {canRemoveTab && workspace.type !== 'TRADING' && (
                   <button
                     onClick={(e) => handleRemoveTab(workspace.id, e)}
                     className={`flex-shrink-0 p-1 transition-all duration-150 opacity-0 group-hover:opacity-100 active:scale-95 ${
@@ -766,8 +825,8 @@ export function WorkspaceTabs() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Lock icon in bottom right */}
-      {currentWorkspace && (
+      {/* Lock icon in bottom right - hidden for TRADING workspaces */}
+      {currentWorkspace && currentWorkspace.type !== 'TRADING' && (
         <div className="absolute bottom-2 right-2 z-20">
           <button
             onClick={handleToggleLock}

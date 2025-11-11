@@ -7,7 +7,7 @@ import { polygon } from 'viem/chains';
  */
 export const VERIFIED_CONTRACTS = {
   // USDC on Polygon (verified)
-  USDC: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174' as Address,
+  USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359' as Address,
   
   // Conditional Tokens (verified)
   CONDITIONAL_TOKENS: '0x4D97DCd97eC945f40cF65F87097ACe5EA047604f' as Address,

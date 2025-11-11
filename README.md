@@ -45,8 +45,10 @@ cd apps/web
 npx prisma generate
 npx prisma migrate dev --name init
 
-# Or use the setup script:
-./prisma-setup.sh
+# Or use the setup script (can be run from any directory):
+./scripts/prisma-setup.sh
+# or from project root:
+scripts/prisma-setup.sh
 ```
 
 ### 5. Start Development Server
@@ -98,9 +100,13 @@ cd apps/web && npx prisma studio
     schema.prisma (database schema)
 ```
 
-## Implementation Status
+## Documentation
 
-See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) for current feature status.
+Additional documentation is available in the [docs](./docs/) directory:
+- Implementation status and feature tracking
+- Bug fixes and testing summaries
+- Deployment guides
+- Troubleshooting guides
 
 ## Features
 
@@ -146,6 +152,6 @@ See `.env.local` template in `apps/web/` for all variables.
 
 ## Support
 
-For setup help, see [SETUP.md](./SETUP.md)
-For implementation details, see [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)
+For setup help, see [SETUP.md](./SETUP.md)  
+For implementation details and historical documentation, see the [docs](./docs/) directory
 

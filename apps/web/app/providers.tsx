@@ -73,10 +73,28 @@ function RealtimeConnectionProvider({ children }: { children: React.ReactNode })
         const firstArg = args[0];
         let message = '';
         
+        // Convert all arguments to strings and check them
+        const allMessages = args.map(arg => {
+          if (typeof arg === 'string') return arg;
+          if (arg instanceof Error) return arg.message;
+          if (arg?.toString) return arg.toString();
+          return String(arg);
+        }).join(' ');
+        
         if (typeof firstArg === 'string') {
           message = firstArg;
         } else if (firstArg?.toString) {
           message = firstArg.toString();
+        }
+        
+        // Suppress Lit dev mode warnings (harmless, just a development notice)
+        if (
+          allMessages.includes('Lit is in dev mode') ||
+          allMessages.includes('lit.dev/msg/dev-mode') ||
+          message.includes('Lit is in dev mode')
+        ) {
+          // Suppress Lit dev mode warning - it's just a development notice
+          return;
         }
         
         // Only suppress specific extension communication errors

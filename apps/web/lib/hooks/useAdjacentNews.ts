@@ -107,6 +107,22 @@ export function useAdjacentNews(params: UseAdjacentNewsParams) {
           error: `HTTP ${response.status}: ${response.statusText}` 
         }));
         const errorMessage = errorData.error || errorData.details || `Failed to fetch news: ${response.statusText}`;
+        
+        // If it's a 401 with "API key not configured", this is expected - don't log as error
+        if (response.status === 401 && errorData.error === 'API key not configured') {
+          // API key is optional - return empty response gracefully
+          return {
+            data: [],
+            meta: {
+              query: keywordsQuery,
+              days,
+              limit,
+              totalResults: 0,
+            },
+          };
+        }
+        
+        // Log other errors
         console.error('[useAdjacentNews] HTTP Error:', errorMessage, errorData);
         throw new Error(errorMessage);
       }

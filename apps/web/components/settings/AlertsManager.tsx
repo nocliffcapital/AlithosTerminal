@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Trash2, Bell, Loader2, History, Play, CheckCircle2, XCircle, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Bell, Loader2, History, Play, CheckCircle2, XCircle, Sparkles, Search } from 'lucide-react';
 import { MarketSelector } from '@/components/MarketSelector';
 import { useMarketStore } from '@/stores/market-store';
 import { useToast } from '@/components/Toast';
@@ -279,13 +279,16 @@ export function AlertsManager() {
           <div>
             <Label className="text-sm mb-2">Market (optional)</Label>
             <div className="flex items-center gap-2">
-              <Input
-                placeholder="Select market (optional for global alerts)"
-                value={newAlert.marketId ? getMarket(newAlert.marketId)?.question || newAlert.marketId : ''}
-                readOnly
-                onClick={() => setShowMarketSelector(true)}
-                className="flex-1 text-sm cursor-pointer"
-              />
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Select market (optional for global alerts)"
+                  value={newAlert.marketId ? getMarket(newAlert.marketId)?.question || newAlert.marketId : ''}
+                  readOnly
+                  onClick={() => setShowMarketSelector(true)}
+                  className="flex-1 text-sm cursor-pointer pl-10"
+                />
+              </div>
               {newAlert.marketId && (
                 <Button
                   variant="ghost"

@@ -143,23 +143,58 @@ function DepthCardComponent() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex flex-col items-center justify-center h-full gap-3 p-4">
         <LoadingSpinner size="sm" text="Loading order book..." />
+        <div className="text-xs text-muted-foreground text-center">
+          Fetching market depth data...
+        </div>
       </div>
     );
   }
 
   if (!orderBook) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm gap-2 p-4">
-        <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
-        <div>No order book data</div>
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm gap-3 p-4">
+        <AlertCircle className="h-10 w-10 text-muted-foreground/50" />
+        <div className="text-center">
+          <div className="font-medium mb-1">No order book data</div>
+          <div className="text-xs text-muted-foreground/70">
+            Unable to load market depth. This might be a temporary issue.
+          </div>
+        </div>
         <Button 
           onClick={() => refetch()} 
           variant="outline" 
           size="sm"
           className="mt-2"
         >
+          <Loader2 className="h-3 w-3 mr-2" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  // Validate order book data
+  if (!orderBook.bids || !orderBook.asks || 
+      (!Array.isArray(orderBook.bids) || orderBook.bids.length === 0) ||
+      (!Array.isArray(orderBook.asks) || orderBook.asks.length === 0)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm gap-3 p-4">
+        <AlertCircle className="h-10 w-10 text-muted-foreground/50" />
+        <div className="text-center">
+          <div className="font-medium mb-1">Invalid order book data</div>
+          <div className="text-xs text-muted-foreground/70">
+            The order book data is missing or incomplete.
+          </div>
+        </div>
+        <Button 
+          onClick={() => refetch()} 
+          variant="outline" 
+          size="sm"
+          className="mt-2"
+        >
+          <Loader2 className="h-3 w-3 mr-2" />
           Retry
         </Button>
       </div>
@@ -167,28 +202,70 @@ function DepthCardComponent() {
   }
 
   // Transform order book data for visualization
+  // Validate and filter out invalid entries
+  const validBids = orderBook.bids.filter(bid => 
+    bid && typeof bid.price === 'number' && !isNaN(bid.price) && 
+    typeof bid.size === 'number' && !isNaN(bid.size) && bid.size > 0
+  ).sort((a, b) => b.price - a.price); // Sort descending (highest price first)
+  
+  const validAsks = orderBook.asks.filter(ask => 
+    ask && typeof ask.price === 'number' && !isNaN(ask.price) && 
+    typeof ask.size === 'number' && !isNaN(ask.size) && ask.size > 0
+  ).sort((a, b) => a.price - b.price); // Sort ascending (lowest price first)
+
+  if (validBids.length === 0 || validAsks.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm gap-3 p-4">
+        <AlertCircle className="h-10 w-10 text-muted-foreground/50" />
+        <div className="text-center">
+          <div className="font-medium mb-1">No valid order book data</div>
+          <div className="text-xs text-muted-foreground/70">
+            The order book has no valid bids or asks.
+          </div>
+        </div>
+        <Button 
+          onClick={() => refetch()} 
+          variant="outline" 
+          size="sm"
+          className="mt-2"
+        >
+          <Loader2 className="h-3 w-3 mr-2" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   const depthData: Array<{ price: number; size: number; side: 'bid' | 'ask'; cumulative: number }> = [
-    // Bids (buy side)
-    ...orderBook.bids
+    // Bids (buy side) - reverse for visualization (lowest to highest)
+    ...validBids
       .slice()
       .reverse()
-      .map((bid, i) => ({
-        price: bid.price,
-        size: bid.size,
-        side: 'bid' as const,
-        cumulative: orderBook.bids
-          .slice(0, orderBook.bids.length - i)
-          .reduce((sum, b) => sum + b.size, 0),
-      })),
+      .map((bid, i) => {
+        // Calculate cumulative from the start (lowest price) up to this point
+        const cumulative = validBids
+          .slice(validBids.length - i - 1)
+          .reduce((sum, b) => sum + (b.size || 0), 0);
+        return {
+          price: bid.price,
+          size: bid.size,
+          side: 'bid' as const,
+          cumulative,
+        };
+      }),
     // Asks (sell side)
-    ...orderBook.asks.map((ask, i) => ({
-      price: ask.price,
-      size: ask.size,
-      side: 'ask' as const,
-      cumulative: orderBook.asks
+    ...validAsks.map((ask, i) => {
+      // Calculate cumulative from the start (lowest price) up to this point
+      const cumulative = validAsks
         .slice(0, i + 1)
-        .reduce((sum, a) => sum + a.size, 0),
-    })),
+        .reduce((sum, a) => sum + (a.size || 0), 0);
+      return {
+        price: ask.price,
+        size: ask.size,
+        side: 'ask' as const,
+        cumulative,
+      };
+    }),
   ];
 
   const formatCurrency = (value: number) => {

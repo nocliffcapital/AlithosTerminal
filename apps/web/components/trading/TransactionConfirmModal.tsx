@@ -20,6 +20,8 @@ import { RiskWarning } from '@/components/ui/RiskWarning';
 import { useTradingSettingsStore } from '@/stores/trading-settings-store';
 import { simulateTrade } from '@/lib/web3/trade-simulation';
 import { TransactionStatusTracker } from '@/components/trading/TransactionStatusTracker';
+import { isRetryableError, getRetryDelay, extractErrorDetails } from '@/lib/errors/error-handler';
+import { RotateCcw } from 'lucide-react';
 
 export interface TransactionDetails {
   type: 'buy' | 'sell';
@@ -63,6 +65,9 @@ export function TransactionConfirmModal({
   const [estimatedGasGwei, setEstimatedGasGwei] = useState<number | null>(null);
   const [estimatedOutcomeTokens, setEstimatedOutcomeTokens] = useState<bigint | null>(null);
   const [simulationResult, setSimulationResult] = useState<any>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<any>(null);
   const { settings } = useTradingSettingsStore();
 
   // Update transaction hash when external hash changes
@@ -156,8 +161,39 @@ export function TransactionConfirmModal({
       }
     } catch (err: any) {
       setTransactionStatus('error');
-      setError(err.message || 'Transaction failed');
+      const errorMsg = err.message || 'Transaction failed';
+      setError(errorMsg);
+      setErrorDetails(extractErrorDetails(err));
       setIsLoading(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!transaction || isRetrying) return;
+
+    const maxRetries = 3;
+    if (retryCount >= maxRetries) {
+      setError('Maximum retry attempts reached. Please try again later.');
+      return;
+    }
+
+    setIsRetrying(true);
+    setError(null);
+    setErrorDetails(null);
+
+    // Calculate delay with exponential backoff
+    const delay = getRetryDelay(retryCount);
+    
+    // Wait for delay before retrying
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    try {
+      setRetryCount(prev => prev + 1);
+      await handleConfirm();
+    } catch (err: any) {
+      // Error will be handled by handleConfirm
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -170,8 +206,11 @@ export function TransactionConfirmModal({
     setTimeout(() => {
       setTransactionStatus('idle');
       setError(null);
+      setErrorDetails(null);
       setTransactionHash(null);
       setIsLoading(false);
+      setRetryCount(0);
+      setIsRetrying(false);
     }, 300);
   };
 
@@ -277,9 +316,59 @@ export function TransactionConfirmModal({
 
           {/* Error Message */}
           {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded text-sm text-red-400">
-              <AlertTriangle className="h-4 w-4" />
-              <span>{error}</span>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded text-sm text-red-400">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="flex-1">{error}</span>
+              </div>
+              
+              {/* Error Details */}
+              {errorDetails && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground mb-2">
+                    View error details
+                  </summary>
+                  <div className="p-2 bg-muted rounded text-muted-foreground font-mono">
+                    {errorDetails.code && <div>Code: {errorDetails.code}</div>}
+                    {errorDetails.status && <div>Status: {errorDetails.status}</div>}
+                    {process.env.NODE_ENV === 'development' && errorDetails.details && (
+                      <pre className="mt-2 text-xs overflow-auto">
+                        {JSON.stringify(errorDetails.details, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                </details>
+              )}
+
+              {/* Retry Button */}
+              {error && errorDetails && isRetryableError(error) && retryCount < 3 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleRetry}
+                    disabled={isRetrying || isLoading}
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                  >
+                    {isRetrying ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Retrying...
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Retry ({retryCount}/3)
+                      </>
+                    )}
+                  </Button>
+                  {retryCount > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      Next retry in {Math.round(getRetryDelay(retryCount) / 1000)}s
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

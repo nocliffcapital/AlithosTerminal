@@ -219,9 +219,8 @@ export function LightweightChartCard({
     const paddedMin = Math.max(0, Math.floor(minValue / increment) * increment);
     const paddedMax = Math.ceil(maxValue / increment) * increment;
     
-    // Add padding (10% of range, but at least 1 increment) to improve visibility
-    const paddingPercent = range <= 0.1 ? 0.2 : 0.1;
-    const padding = Math.max(increment, range * paddingPercent);
+    // Add exactly 10% padding on each direction
+    const padding = range * 0.1;
     const finalMin = Math.max(0, paddedMin - padding);
     const finalMax = paddedMax + padding;
     

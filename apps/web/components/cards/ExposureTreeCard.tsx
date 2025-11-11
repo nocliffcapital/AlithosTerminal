@@ -3,12 +3,13 @@
 import React, { useMemo, useState } from 'react';
 import { useMarketStore } from '@/stores/market-store';
 import { usePositions } from '@/lib/hooks/usePositions';
-import { ChevronRight, ChevronDown, Filter, TrendingUp, TrendingDown, Download, BarChart3 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Filter, TrendingUp, TrendingDown, Download, BarChart3, Info, Layers, Wallet, ChevronsDown, ChevronsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/utils';
 import { formatUnits } from 'viem';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +33,7 @@ function ExposureTreeCardComponent() {
   const [expandedMarkets, setExpandedMarkets] = useState<Set<string>>(new Set());
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(true);
+  const [expandAll, setExpandAll] = useState(false);
   
   // Type guard for positions
   const positionsArray = positions && Array.isArray(positions) ? positions : [];
@@ -250,6 +252,18 @@ function ExposureTreeCardComponent() {
     setExpandedNodes(newExpanded);
   };
 
+  const expandAllNodes = () => {
+    const allNodeIds = new Set(filteredEventTree.map((node) => node.id));
+    setExpandedNodes(allNodeIds);
+    setExpandAll(true);
+  };
+
+  const collapseAllNodes = () => {
+    setExpandedNodes(new Set());
+    setExpandedMarkets(new Set());
+    setExpandAll(false);
+  };
+
   if (positionsLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -270,307 +284,349 @@ function ExposureTreeCardComponent() {
   }
 
   return (
-    <div className="h-full flex flex-col p-3 overflow-hidden">
-      {/* Header with Filters */}
-      <div className="flex-shrink-0 mb-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-xs font-semibold">Event Exposure Tree</div>
-            <div className="text-[10px] text-muted-foreground">Roll-up exposure across related markets</div>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              className="text-xs h-6 px-2"
-              title="Export exposure report"
-            >
-              <Download className="h-3 w-3" />
-            </Button>
-            {categories.length > 1 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-xs h-6 px-2">
-                    <Filter className="h-3 w-3 mr-1" />
-                    {filterCategory || 'All'}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-32">
-                  <DropdownMenuItem
-                    onClick={() => setFilterCategory(null)}
-                    className={!filterCategory ? 'bg-accent' : ''}
+    <TooltipProvider>
+      <div className="h-full flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex-shrink-0 px-3 py-2.5 border-b border-border bg-accent/20">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold">Exposure Tree</span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3 w-3 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p>View your portfolio exposure grouped by category/event. Expand nodes to see individual market positions.</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExport}
+                    className="text-xs h-6 px-2"
                   >
-                    <span className="text-xs">All</span>
-                  </DropdownMenuItem>
-                  {categories.map((cat) => (
+                    <Download className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Export exposure report</p>
+                </TooltipContent>
+              </Tooltip>
+              {categories.length > 1 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-xs h-6 px-2">
+                      <Filter className="h-3 w-3 mr-1" />
+                      {filterCategory || 'All'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-32">
                     <DropdownMenuItem
-                      key={cat}
-                      onClick={() => setFilterCategory(cat)}
-                      className={filterCategory === cat ? 'bg-accent' : ''}
+                      onClick={() => setFilterCategory(null)}
+                      className={!filterCategory ? 'bg-accent' : ''}
                     >
-                      <span className="text-xs capitalize">{cat}</span>
+                      <span className="text-xs">All</span>
                     </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                    {categories.map((cat) => (
+                      <DropdownMenuItem
+                        key={cat}
+                        onClick={() => setFilterCategory(cat)}
+                        className={filterCategory === cat ? 'bg-accent' : ''}
+                      >
+                        <span className="text-xs capitalize">{cat}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
           </div>
+          {filteredEventTree.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={expandAll ? collapseAllNodes : expandAllNodes}
+                className="text-[10px] h-5 px-2"
+              >
+                {expandAll ? (
+                  <>
+                    <ChevronsUp className="h-3 w-3 mr-1" />
+                    Collapse All
+                  </>
+                ) : (
+                  <>
+                    <ChevronsDown className="h-3 w-3 mr-1" />
+                    Expand All
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </div>
-      </div>
 
-      {/* Summary Statistics */}
-      {showSummary && filteredEventTree.length > 0 && (
-        <div className="flex-shrink-0 mb-3 p-2 border border-border rounded-lg bg-card space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold">
-            <span>Summary Statistics</span>
+        {/* Summary Statistics */}
+        <div className="flex-shrink-0 px-3 py-2 border-b border-border bg-accent/10">
+          {showSummary && filteredEventTree.length > 0 ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold mb-2">
+                <div className="flex items-center gap-1.5">
+                  <BarChart3 className="h-3 w-3 text-muted-foreground" />
+                  <span>Portfolio Summary</span>
+                </div>
+                <button
+                  onClick={() => setShowSummary(false)}
+                  className="text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  Hide
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div className="p-1.5 bg-background/50 rounded border border-border/50">
+                  <div className="text-muted-foreground mb-0.5">Total Exposure</div>
+                  <div className="font-mono font-bold text-xs">
+                    {formatCurrency(summaryStats.totalExposure)}
+                  </div>
+                </div>
+                <div className="p-1.5 bg-background/50 rounded border border-border/50">
+                  <div className="text-muted-foreground mb-0.5">Markets</div>
+                  <div className="font-semibold text-xs">{summaryStats.totalMarkets}</div>
+                </div>
+                <div className="p-1.5 bg-background/50 rounded border border-border/50">
+                  <div className="text-muted-foreground mb-0.5">Min P&L</div>
+                  <div className={cn(
+                    "font-mono font-bold text-xs",
+                    summaryStats.totalMinPnL < 0 ? "text-red-400" : "text-green-400"
+                  )}>
+                    {formatCurrency(summaryStats.totalMinPnL)}
+                  </div>
+                </div>
+                <div className="p-1.5 bg-background/50 rounded border border-border/50">
+                  <div className="text-muted-foreground mb-0.5">Max P&L</div>
+                  <div className={cn(
+                    "font-mono font-bold text-xs",
+                    summaryStats.totalMaxPnL >= 0 ? "text-green-400" : "text-red-400"
+                  )}>
+                    {formatCurrency(summaryStats.totalMaxPnL)}
+                  </div>
+                </div>
+                <div className="col-span-2 p-1.5 bg-background/50 rounded border border-border/50">
+                  <div className="text-muted-foreground mb-0.5">Avg Exposure/Market</div>
+                  <div className="font-mono font-semibold text-xs">
+                    {formatCurrency(summaryStats.avgExposurePerMarket)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : filteredEventTree.length > 0 ? (
             <button
-              onClick={() => setShowSummary(false)}
+              onClick={() => setShowSummary(true)}
               className="text-[10px] text-muted-foreground hover:text-foreground"
             >
-              Hide
+              Show Summary
             </button>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-[10px]">
-            <div>
-              <span className="text-muted-foreground">Total Exposure:</span>
-              <span className="ml-1 font-mono font-semibold">
-                {formatCurrency(summaryStats.totalExposure)}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Markets:</span>
-              <span className="ml-1 font-semibold">{summaryStats.totalMarkets}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Min P&L:</span>
-              <span className={cn(
-                "ml-1 font-mono font-semibold",
-                summaryStats.totalMinPnL < 0 ? "text-red-400" : "text-green-400"
-              )}>
-                {formatCurrency(summaryStats.totalMinPnL)}
-              </span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Max P&L:</span>
-              <span className={cn(
-                "ml-1 font-mono font-semibold",
-                summaryStats.totalMaxPnL >= 0 ? "text-green-400" : "text-red-400"
-              )}>
-                {formatCurrency(summaryStats.totalMaxPnL)}
-              </span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-muted-foreground">Avg Exposure/Market:</span>
-              <span className="ml-1 font-mono font-semibold">
-                {formatCurrency(summaryStats.avgExposurePerMarket)}
-              </span>
-            </div>
-          </div>
+          ) : null}
         </div>
-      )}
 
-      {!showSummary && filteredEventTree.length > 0 && (
-        <div className="flex-shrink-0 mb-2">
-          <button
-            onClick={() => setShowSummary(true)}
-            className="text-[10px] text-muted-foreground hover:text-foreground"
-          >
-            Show Summary
-          </button>
-        </div>
-      )}
+        {/* Event Tree */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+          {filteredEventTree.length === 0 ? (
+            <EmptyState
+              icon={Filter}
+              title="No categories found"
+              description="No markets match the selected filter"
+              className="p-4"
+            />
+          ) : (
+            filteredEventTree.map((node) => {
+              const { totalExposure, minPnL, maxPnL, marketPositions } = calculateExposure(
+                node.markets
+              );
+              const isExpanded = expandedNodes.has(node.id);
+              
+              // Calculate exposure percentage for progress bar
+              const maxExposure = Math.max(...filteredEventTree.map((n) => calculateExposure(n.markets).totalExposure), totalExposure);
+              const exposurePercent = maxExposure > 0 ? (totalExposure / maxExposure) * 100 : 0;
 
-      {/* Event Tree */}
-      <div className="flex-1 overflow-y-auto space-y-2">
-        {filteredEventTree.length === 0 ? (
-          <EmptyState
-            icon={Filter}
-            title="No categories found"
-            description="No markets match the selected filter"
-            className="p-4"
-          />
-        ) : (
-          filteredEventTree.map((node) => {
-            const { totalExposure, minPnL, maxPnL, marketPositions } = calculateExposure(
-              node.markets
-            );
-            const isExpanded = expandedNodes.has(node.id);
-            
-            // Calculate exposure percentage for progress bar
-            const maxExposure = Math.max(...filteredEventTree.map((n) => calculateExposure(n.markets).totalExposure), totalExposure);
-            const exposurePercent = maxExposure > 0 ? (totalExposure / maxExposure) * 100 : 0;
-
-            return (
-              <div key={node.id} className="border border-border rounded-lg p-2 bg-card hover:bg-accent/20 transition-colors">
-                <div
-                  className="flex items-center justify-between cursor-pointer hover:bg-accent/50 rounded p-1"
-                  onClick={() => toggleNode(node.id)}
-                >
-                  <div className="flex items-center gap-1 flex-1 min-w-0">
-                    {isExpanded ? (
-                      <ChevronDown className="h-3 w-3 flex-shrink-0" />
-                    ) : (
-                      <ChevronRight className="h-3 w-3 flex-shrink-0" />
-                    )}
-                    <span className="text-xs font-semibold truncate">{node.name}</span>
-                    <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                      ({node.markets.length} markets)
-                    </span>
-                  </div>
-                  <div className="text-xs font-mono font-semibold flex-shrink-0 ml-2">
-                    {formatCurrency(totalExposure)}
-                  </div>
-                </div>
-
-                {/* Exposure Progress Bar */}
-                <div className="mt-1.5 mb-1.5">
-                  <div className="w-full bg-background h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-1.5 transition-all duration-300",
-                        totalExposure > 0 ? "bg-primary" : "bg-muted-foreground"
-                      )}
-                      style={{ width: `${Math.min(100, exposurePercent)}%` }}
-                    />
-                  </div>
-                </div>
-
-                {isExpanded && (
-                  <div className="mt-2 pl-4 space-y-2 border-l-2 border-primary/30">
-                    {/* P&L Range */}
-                    <div className="space-y-1">
-                      <div className="text-[10px] font-semibold text-muted-foreground">
-                        P&L at Resolution:
+              return (
+                <div key={node.id} className="border border-border rounded-lg bg-card hover:border-primary/30 transition-colors">
+                  {/* Category Header */}
+                  <div
+                    className="flex items-center justify-between cursor-pointer p-2.5 hover:bg-accent/30 rounded-t-lg transition-colors"
+                    onClick={() => toggleNode(node.id)}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className={cn(
+                        "transition-transform duration-200",
+                        isExpanded ? "rotate-90" : ""
+                      )}>
+                        <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                       </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                          <TrendingDown className="h-3 w-3 text-red-400" />
-                          Min:
-                        </span>
-                        <span className={cn(
-                          "font-mono font-semibold",
-                          minPnL < 0 ? "text-red-400" : "text-green-400"
-                        )}>
-                          {formatCurrency(minPnL)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground flex items-center gap-1">
-                          <TrendingUp className="h-3 w-3 text-green-400" />
-                          Max:
-                        </span>
-                        <span className={cn(
-                          "font-mono font-semibold",
-                          maxPnL >= 0 ? "text-green-400" : "text-red-400"
-                        )}>
-                          {formatCurrency(maxPnL)}
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <Layers className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                        <span className="text-xs font-bold truncate">{node.name}</span>
+                        <span className="text-[10px] text-muted-foreground flex-shrink-0 px-1.5 py-0.5 bg-accent/50 rounded">
+                          {node.markets.length} {node.markets.length === 1 ? 'market' : 'markets'}
                         </span>
                       </div>
                     </div>
-
-                    {/* Individual Market Positions */}
-                    {marketPositions.length > 0 && (
-                      <div className="space-y-1 pt-2 border-t border-border/50">
-                        <div className="text-[10px] font-semibold text-muted-foreground mb-1">
-                          Market Positions ({marketPositions.length}):
-                        </div>
-                        {marketPositions.map(({ marketId, position, exposure, minPnL: marketMinPnL, maxPnL: marketMaxPnL }) => {
-                          const market = markets[marketId];
-                          const isMarketExpanded = expandedMarkets.has(marketId);
-                          
-                          return (
-                            <div key={marketId} className="border border-border/50 rounded p-1.5 bg-background/50">
-                              <div
-                                className="flex items-center justify-between cursor-pointer hover:bg-accent/30 rounded p-0.5"
-                                onClick={() => toggleMarket(marketId)}
-                              >
-                                <div className="flex items-center gap-1 flex-1 min-w-0">
-                                  {isMarketExpanded ? (
-                                    <ChevronDown className="h-2.5 w-2.5 flex-shrink-0" />
-                                  ) : (
-                                    <ChevronRight className="h-2.5 w-2.5 flex-shrink-0" />
-                                  )}
-                                  <span className="text-[10px] font-medium truncate">
-                                    {market?.question || marketId}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  <span className={cn(
-                                    "text-[10px] font-semibold",
-                                    position.outcome === 'YES' ? "text-green-400" : "text-red-400"
-                                  )}>
-                                    {position.outcome}
-                                  </span>
-                                  <span className="text-[10px] font-mono">
-                                    {formatCurrency(exposure)}
-                                  </span>
-                                </div>
-                              </div>
-                              
-                              {isMarketExpanded && (
-                                <div className="mt-1.5 pl-3 space-y-1 border-l border-border/30">
-                                  <div className="grid grid-cols-2 gap-1 text-[10px]">
-                                    <div>
-                                      <span className="text-muted-foreground">Size:</span>
-                                      <span className="ml-1 font-mono">
-                                        {formatUnits(BigInt(Math.floor(parseFloat(position.amount || '0'))), 6)}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Entry:</span>
-                                      <span className="ml-1 font-mono">
-                                        ${(position.entryPrice || 0.5).toFixed(3)}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Current:</span>
-                                      <span className="ml-1 font-mono">
-                                        ${(position.currentPrice || position.entryPrice || 0.5).toFixed(3)}
-                                      </span>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Value:</span>
-                                      <span className="ml-1 font-mono">
-                                        {formatCurrency(position.currentValue || position.costBasis || 0)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="pt-1 border-t border-border/30">
-                                    <div className="flex items-center justify-between text-[10px]">
-                                      <span className="text-muted-foreground">P&L Range:</span>
-                                      <span className="font-mono">
-                                        {formatCurrency(marketMinPnL)} / {formatCurrency(marketMaxPnL)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      <div className="text-xs font-mono font-bold">
+                        {formatCurrency(totalExposure)}
                       </div>
-                    )}
+                    </div>
                   </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
 
-      {/* Total Summary Footer */}
-      {filteredEventTree.length > 0 && (
-        <div className="flex-shrink-0 mt-2 pt-2 border-t border-border">
-          <div className="flex items-center justify-between text-xs font-semibold">
-            <span>Total Exposure</span>
-            <span className="font-mono font-semibold">
-              {formatCurrency(summaryStats.totalExposure)}
-            </span>
-          </div>
+                  {/* Exposure Progress Bar */}
+                  <div className="px-2.5 pb-2">
+                    <div className="w-full bg-background h-2 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-2 transition-all duration-300 rounded-full",
+                          totalExposure > 0 ? "bg-primary" : "bg-muted-foreground"
+                        )}
+                        style={{ width: `${Math.min(100, exposurePercent)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="px-2.5 pb-2.5 space-y-3 border-t border-border/50">
+                      {/* P&L Range Summary */}
+                      <div className="p-2 bg-accent/20 rounded border border-border/50">
+                        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          P&L Range at Resolution
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-1.5 bg-background/50 rounded border border-border/30">
+                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">
+                              <TrendingDown className="h-2.5 w-2.5 text-red-400" />
+                              <span>Minimum</span>
+                            </div>
+                            <div className={cn(
+                              "font-mono font-bold text-xs",
+                              minPnL < 0 ? "text-red-400" : "text-green-400"
+                            )}>
+                              {formatCurrency(minPnL)}
+                            </div>
+                          </div>
+                          <div className="p-1.5 bg-background/50 rounded border border-border/30">
+                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground mb-0.5">
+                              <TrendingUp className="h-2.5 w-2.5 text-green-400" />
+                              <span>Maximum</span>
+                            </div>
+                            <div className={cn(
+                              "font-mono font-bold text-xs",
+                              maxPnL >= 0 ? "text-green-400" : "text-red-400"
+                            )}>
+                              {formatCurrency(maxPnL)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Individual Market Positions */}
+                      {marketPositions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                            <Wallet className="h-3 w-3" />
+                            <span>Market Positions ({marketPositions.length})</span>
+                          </div>
+                          <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                            {marketPositions.map(({ marketId, position, exposure, minPnL: marketMinPnL, maxPnL: marketMaxPnL }) => {
+                              const market = markets[marketId];
+                              const isMarketExpanded = expandedMarkets.has(marketId);
+                              
+                              return (
+                                <div key={marketId} className="border border-border/50 rounded-lg bg-background/50 hover:border-primary/30 transition-colors">
+                                  <div
+                                    className="flex items-center justify-between cursor-pointer p-2 hover:bg-accent/20 rounded-lg transition-colors"
+                                    onClick={() => toggleMarket(marketId)}
+                                  >
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                      <div className={cn(
+                                        "transition-transform duration-200",
+                                        isMarketExpanded ? "rotate-90" : ""
+                                      )}>
+                                        <ChevronRight className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
+                                      </div>
+                                      <span className="text-[10px] font-medium truncate">
+                                        {market?.question || marketId}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                      <span className={cn(
+                                        "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                                        position.outcome === 'YES' 
+                                          ? "text-green-400 bg-green-400/10" 
+                                          : "text-red-400 bg-red-400/10"
+                                      )}>
+                                        {position.outcome}
+                                      </span>
+                                      <span className="text-[10px] font-mono font-semibold">
+                                        {formatCurrency(exposure)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  {isMarketExpanded && (
+                                    <div className="px-2 pb-2 space-y-2 border-t border-border/30">
+                                      <div className="grid grid-cols-2 gap-2 pt-2 text-[10px]">
+                                        <div>
+                                          <span className="text-muted-foreground">Size:</span>
+                                          <span className="ml-1 font-mono font-semibold">
+                                            {formatUnits(BigInt(Math.floor(parseFloat(position.amount || '0'))), 6)}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-muted-foreground">Entry Price:</span>
+                                          <span className="ml-1 font-mono font-semibold">
+                                            ${(position.entryPrice || 0.5).toFixed(3)}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-muted-foreground">Current Price:</span>
+                                          <span className="ml-1 font-mono font-semibold">
+                                            ${(position.currentPrice || position.entryPrice || 0.5).toFixed(3)}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-muted-foreground">Value:</span>
+                                          <span className="ml-1 font-mono font-semibold">
+                                            {formatCurrency(position.currentValue || position.costBasis || 0)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="pt-1.5 border-t border-border/30">
+                                        <div className="flex items-center justify-between text-[10px]">
+                                          <span className="text-muted-foreground">P&L Range:</span>
+                                          <span className="font-mono font-semibold">
+                                            {formatCurrency(marketMinPnL)} / {formatCurrency(marketMaxPnL)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }
 

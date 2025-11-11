@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
 import { WorkspaceGrid } from '@/components/layout/WorkspaceGrid';
+import { TradingWorkspace } from '@/components/layout/TradingWorkspace';
 import { Card } from '@/components/layout/Card';
+import { isTradingWorkspace } from '@/stores/layout-store';
 import { PresetsDialog } from '@/components/PresetsDialog';
 import { usePresets } from '@/lib/hooks/usePresets';
 import { HotkeyManager } from '@/components/HotkeyManager';
@@ -100,24 +102,108 @@ export default function Home() {
 
   // Initialize workspace on load - only run once when workspaces are first loaded
   useEffect(() => {
-    if (userWorkspaces && userWorkspaces.length > 0 && !currentLayout) {
-      // Use first workspace
-      const firstWorkspace = userWorkspaces[0];
-      
-      // Load the first layout for this workspace if it exists
-      if (firstWorkspace.layouts && firstWorkspace.layouts.length > 0) {
-        const firstLayout = firstWorkspace.layouts[0];
-        if (firstLayout) {
-          // Load layout into store
-          useLayoutStore.getState().loadLayout(firstLayout.id);
+    if (!dbUser?.id || workspacesLoading) return;
+    
+    if (userWorkspaces && userWorkspaces.length === 0) {
+      // New user with no workspaces - auto-create trading workspace first, then custom workspace
+      const createInitialWorkspaces = async () => {
+        try {
+          // First, create the trading workspace (required, always visible)
+          const tradingResult = await createWorkspace.mutateAsync({
+            name: 'Trading',
+            type: 'TRADING',
+          });
+          
+          if (tradingResult?.workspace) {
+            // Set trading workspace as current
+            await setCurrentWorkspace(tradingResult.workspace.id);
+            
+            // Then create a custom workspace with default template
+            try {
+              // Fetch default templates to get the Starter Workspace template ID
+              const templatesResponse = await fetch('/api/templates');
+              if (templatesResponse.ok) {
+                const templatesData = await templatesResponse.json();
+                const templates = templatesData.templates || [];
+                
+                // Find the "Starter Workspace" default template
+                const starterTemplate = templates.find((t: any) => 
+                  t.isDefault && t.name === 'Starter Workspace'
+                );
+                
+                if (starterTemplate) {
+                  // Create custom workspace with default template
+                  await createWorkspace.mutateAsync({
+                    name: 'My Workspace',
+                    type: 'CUSTOM',
+                    templateId: starterTemplate.id,
+                  });
+                } else {
+                  // Fallback: create custom workspace without template
+                  await createWorkspace.mutateAsync({
+                    name: 'My Workspace',
+                    type: 'CUSTOM',
+                  });
+                }
+              } else {
+                // Fallback: create custom workspace without template
+                await createWorkspace.mutateAsync({
+                  name: 'My Workspace',
+                  type: 'CUSTOM',
+                });
+              }
+            } catch (customError) {
+              console.error('Failed to create custom workspace:', customError);
+              // Trading workspace was created successfully, so continue
+            }
+          }
+        } catch (error) {
+          console.error('Failed to create trading workspace:', error);
         }
+      };
+      
+      createInitialWorkspaces();
+    } else if (userWorkspaces && userWorkspaces.length > 0) {
+      // Check if user has a trading workspace, if not create it
+      const hasTradingWorkspace = userWorkspaces.some((w: any) => w.type === 'TRADING');
+      
+      if (!hasTradingWorkspace) {
+        const createTradingWorkspace = async () => {
+          try {
+            const result = await createWorkspace.mutateAsync({
+              name: 'Trading',
+              type: 'TRADING',
+            });
+            
+            if (result?.workspace) {
+              // Optionally switch to trading workspace
+              await setCurrentWorkspace(result.workspace.id);
+            }
+          } catch (error) {
+            console.error('Failed to create trading workspace:', error);
+          }
+        };
+        
+        createTradingWorkspace();
+      } else if (!currentLayout) {
+        // User has workspaces, load the first one (should be TRADING)
+        const firstWorkspace = userWorkspaces[0];
+        
+        // Load the first layout for this workspace if it exists
+        if (firstWorkspace.layouts && firstWorkspace.layouts.length > 0) {
+          const firstLayout = firstWorkspace.layouts[0];
+          if (firstLayout) {
+            // Load layout into store
+            useLayoutStore.getState().loadLayout(firstLayout.id);
+          }
+        }
+        setCurrentWorkspace(firstWorkspace.id).catch((err) => {
+          console.error('Failed to set workspace:', err);
+        });
       }
-      setCurrentWorkspace(firstWorkspace.id).catch((err) => {
-        console.error('Failed to set workspace:', err);
-      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userWorkspaces]); // Only depend on userWorkspaces, not currentLayout
+  }, [userWorkspaces, dbUser?.id, workspacesLoading]); // Include dbUser and workspacesLoading
 
   if (!ready) {
     return (
@@ -252,6 +338,7 @@ export default function Home() {
                   variant="outline"
                   size="lg"
                   className="px-8 py-6 text-base font-semibold flex items-center gap-2"
+                  onClick={() => router.push('/docs')}
                 >
                   Explore docs
                   <ArrowRight className="h-4 w-4" />
@@ -397,7 +484,11 @@ export default function Home() {
             </div>
             <div className="hidden sm:flex items-center gap-2">
               <WorkspaceSelector />
-              <AddCardButton />
+              {authenticated && currentWorkspaceId && (() => {
+                const currentWorkspace = userWorkspaces?.find((w: any) => w.id === currentWorkspaceId);
+                const isTrading = isTradingWorkspace(currentWorkspace?.type);
+                return !isTrading && <AddCardButton variant="inline" />;
+              })()}
             </div>
               </div>
               <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
@@ -496,31 +587,44 @@ export default function Home() {
         {!linkSelectionMode && <WorkspaceTabs />}
 
         {/* Workspace */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto relative">
           {workspacesLoading ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
               <div className="text-muted-foreground text-sm">Loading workspaces...</div>
             </div>
           ) : currentWorkspaceId ? (
-            currentLayout ? (
-              <>
-                <WorkspaceGrid />
-                {/* Render maximized cards outside the grid, at page level for fullscreen */}
-                {currentLayout.cards
-                  .filter((card) => card.isMaximized)
-                  .map((card) => (
-                    <Card key={card.id} card={card} />
-                  ))}
-              </>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-                  <p className="text-muted-foreground">Loading workspace...</p>
+            (() => {
+              const currentWorkspace = userWorkspaces?.find((w: any) => w.id === currentWorkspaceId);
+              const isTrading = isTradingWorkspace(currentWorkspace?.type);
+              
+              if (isTrading) {
+                return <TradingWorkspace />;
+              }
+              
+              if (currentLayout) {
+                return (
+                  <>
+                    <WorkspaceGrid />
+                    {/* Render maximized cards outside the grid, at page level for fullscreen */}
+                    {currentLayout.cards
+                      .filter((card) => card.isMaximized)
+                      .map((card) => (
+                        <Card key={card.id} card={card} />
+                      ))}
+                  </>
+                );
+              }
+              
+              return (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+                    <p className="text-muted-foreground">Loading workspace...</p>
+                  </div>
                 </div>
-              </div>
-            )
+              );
+            })()
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">

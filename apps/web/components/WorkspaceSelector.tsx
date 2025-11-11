@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
-import { ChevronDown, Plus, X, Edit2, Trash2, Check, Loader2, Save, FileText, Lock, Unlock } from 'lucide-react';
+import { ChevronDown, Plus, X, Edit2, Trash2, Check, Loader2, Save, FileText, Lock, Unlock, RotateCcw } from 'lucide-react';
 
 export function WorkspaceSelector() {
   const { data: workspaces = [], isLoading, error } = useWorkspaces();
@@ -31,6 +31,7 @@ export function WorkspaceSelector() {
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedWorkspaceType, setSelectedWorkspaceType] = useState<'CUSTOM' | 'TRADING'>('CUSTOM');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -41,6 +42,16 @@ export function WorkspaceSelector() {
   const createTemplate = useCreateTemplate();
   const { currentLayout } = useLayoutStore();
   const currentWorkspace = workspaces.find((w: any) => w.id === currentWorkspaceId);
+  
+  // Check if user already has a TRADING workspace
+  const hasTradingWorkspace = workspaces.some((w: any) => w.type === 'TRADING');
+  
+  // Reset to CUSTOM if TRADING is selected but user already has one
+  useEffect(() => {
+    if (hasTradingWorkspace && selectedWorkspaceType === 'TRADING') {
+      setSelectedWorkspaceType('CUSTOM');
+    }
+  }, [hasTradingWorkspace, selectedWorkspaceType]);
 
   // Debug logging
   useEffect(() => {
@@ -100,7 +111,7 @@ export function WorkspaceSelector() {
     try {
       const result = await createWorkspace.mutateAsync({
         name: workspaceName.trim(),
-        type: 'CUSTOM',
+        type: selectedWorkspaceType,
         templateId: selectedTemplateId || undefined,
       });
       if (result?.workspace) {
@@ -172,6 +183,63 @@ export function WorkspaceSelector() {
       }
     } catch (error) {
       console.error('Failed to delete workspace:', error);
+    }
+  };
+
+  const handleResetToDefault = async () => {
+    if (!currentWorkspaceId || !currentLayout) return;
+    
+    try {
+      // Fetch default templates
+      const templatesResponse = await fetch('/api/templates');
+      if (templatesResponse.ok) {
+        const templatesData = await templatesResponse.json();
+        const templates = templatesData.templates || [];
+        
+        // Find the "Starter Workspace" default template
+        const starterTemplate = templates.find((t: any) => 
+          t.isDefault && t.name === 'Starter Workspace'
+        );
+        
+        if (starterTemplate && starterTemplate.config) {
+          const templateConfig = starterTemplate.config as any;
+          const layoutStore = useLayoutStore.getState();
+          
+          // Generate unique IDs for cards to avoid conflicts
+          const cardsWithUniqueIds = (templateConfig.cards || []).map((card: any, index: number) => ({
+            ...card,
+            id: `${card.type}-${Date.now()}-${index}`,
+            layout: {
+              ...card.layout,
+              i: `${card.type}-${Date.now()}-${index}`,
+            },
+          }));
+          
+          // Update the layout directly with the template cards
+          const updatedLayout = {
+            ...currentLayout,
+            cards: cardsWithUniqueIds,
+          };
+          
+          // Update the store
+          useLayoutStore.setState({
+            currentLayout: updatedLayout,
+            workspaces: {
+              ...layoutStore.workspaces,
+              [currentWorkspaceId]: updatedLayout,
+            },
+          });
+          
+          // Save the layout
+          await useLayoutStore.getState().saveLayout();
+          
+          setDropdownOpen(false);
+        } else {
+          console.error('Default template not found');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to reset workspace to default:', error);
     }
   };
 
@@ -270,21 +338,23 @@ export function WorkspaceSelector() {
                           </span>
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleToggleLock(workspace.id, workspace.locked || false);
-                            }}
-                            className="p-1 hover:bg-accent"
-                            title={workspace.locked ? 'Unlock workspace' : 'Lock workspace'}
-                          >
-                            {workspace.locked ? (
-                              <Lock className="h-3 w-3 text-yellow-500" />
-                            ) : (
-                              <Unlock className="h-3 w-3 text-muted-foreground" />
-                            )}
-                          </button>
+                          {workspace.type !== 'TRADING' && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleToggleLock(workspace.id, workspace.locked || false);
+                              }}
+                              className="p-1 hover:bg-accent"
+                              title={workspace.locked ? 'Unlock workspace' : 'Lock workspace'}
+                            >
+                              {workspace.locked ? (
+                                <Lock className="h-3 w-3 text-yellow-500" />
+                              ) : (
+                                <Unlock className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </button>
+                          )}
                           <button
                             onClick={(e) => {
                               e.preventDefault();
@@ -293,9 +363,9 @@ export function WorkspaceSelector() {
                             }}
                             className="p-1 hover:bg-accent"
                             title="Edit workspace"
-                            disabled={workspace.locked}
+                            disabled={workspace.locked || workspace.type === 'TRADING'}
                           >
-                            <Edit2 className={`h-3 w-3 ${workspace.locked ? 'text-muted-foreground/50' : 'text-muted-foreground'}`} />
+                            <Edit2 className={`h-3 w-3 ${workspace.locked || workspace.type === 'TRADING' ? 'text-muted-foreground/50' : 'text-muted-foreground'}`} />
                           </button>
                           <button
                             onClick={(e) => {
@@ -305,9 +375,9 @@ export function WorkspaceSelector() {
                             }}
                             className="p-1 hover:bg-accent"
                             title="Delete workspace"
-                            disabled={workspace.locked}
+                            disabled={workspace.locked || workspace.type === 'TRADING'}
                           >
-                            <Trash2 className={`h-3 w-3 ${workspace.locked ? 'text-destructive/50' : 'text-destructive'}`} />
+                            <Trash2 className={`h-3 w-3 ${workspace.locked || workspace.type === 'TRADING' ? 'text-destructive/50' : 'text-destructive'}`} />
                           </button>
                         </div>
                       </div>
@@ -319,17 +389,32 @@ export function WorkspaceSelector() {
           )}
           <DropdownMenuSeparator />
           {currentLayout && currentLayout.cards.length > 0 && (
-            <DropdownMenuItem
-              onClick={(e) => {
-                e.preventDefault();
-                setDropdownOpen(false);
-                setShowSaveTemplateDialog(true);
-              }}
-              className="cursor-pointer"
-            >
-              <Save className="h-3 w-3 mr-2" />
-              <span className="text-xs">Save as Template</span>
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDropdownOpen(false);
+                  setShowSaveTemplateDialog(true);
+                }}
+                className="cursor-pointer"
+              >
+                <Save className="h-3 w-3 mr-2" />
+                <span className="text-xs">Save as Template</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.preventDefault();
+                  setDropdownOpen(false);
+                  if (confirm('Reset workspace to default template? This will replace all current cards.')) {
+                    handleResetToDefault();
+                  }
+                }}
+                className="cursor-pointer"
+              >
+                <RotateCcw className="h-3 w-3 mr-2" />
+                <span className="text-xs">Reset to Default</span>
+              </DropdownMenuItem>
+            </>
           )}
           <DropdownMenuItem
             onClick={(e) => {
@@ -360,6 +445,7 @@ export function WorkspaceSelector() {
                   setShowCreateDialog(false);
                   setWorkspaceName('');
                   setSelectedTemplateId(null);
+                  setSelectedWorkspaceType('CUSTOM');
                 }}
                 className="p-1.5 hover:bg-accent/60 transition-all duration-150 active:scale-95"
                 aria-label="Close dialog"
@@ -389,6 +475,38 @@ export function WorkspaceSelector() {
                   autoFocus
                 />
               </div>
+              {!hasTradingWorkspace && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block text-foreground">
+                    Workspace Type
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedWorkspaceType('CUSTOM')}
+                      className={`flex-1 px-3 py-2 text-sm border transition-colors ${
+                        selectedWorkspaceType === 'CUSTOM'
+                          ? 'border-primary bg-accent/50'
+                          : 'border-border hover:bg-accent/30'
+                      }`}
+                    >
+                      <div className="text-xs font-medium">Custom</div>
+                      <div className="text-xs text-muted-foreground">Modular grid layout</div>
+                    </button>
+                    <button
+                      onClick={() => setSelectedWorkspaceType('TRADING')}
+                      className={`flex-1 px-3 py-2 text-sm border transition-colors ${
+                        selectedWorkspaceType === 'TRADING'
+                          ? 'border-primary bg-accent/50'
+                          : 'border-border hover:bg-accent/30'
+                      }`}
+                    >
+                      <div className="text-xs font-medium">Trading</div>
+                      <div className="text-xs text-muted-foreground">Fixed trading terminal</div>
+                    </button>
+                  </div>
+                </div>
+              )}
+              {selectedWorkspaceType === 'CUSTOM' && (
               <div>
                 <label className="text-sm font-medium mb-2 block">
                   Create from Template (optional)
@@ -438,6 +556,7 @@ export function WorkspaceSelector() {
                   </div>
                 )}
               </div>
+              )}
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
@@ -446,6 +565,7 @@ export function WorkspaceSelector() {
                     setShowCreateDialog(false);
                     setWorkspaceName('');
                     setSelectedTemplateId(null);
+                    setSelectedWorkspaceType('CUSTOM');
                   }}
                 >
                   Cancel

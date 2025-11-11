@@ -4,12 +4,17 @@
 echo "🔍 Checking database connection..."
 echo ""
 
+# Get project root directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WEB_DIR="$PROJECT_ROOT/apps/web"
+
 # Load DATABASE_URL from .env.local
-if [ -f .env.local ]; then
-  export DATABASE_URL=$(grep -E "^DATABASE_URL" .env.local | cut -d'=' -f2- | tr -d '"')
+if [ -f "$WEB_DIR/.env.local" ]; then
+  export DATABASE_URL=$(grep -E "^DATABASE_URL" "$WEB_DIR/.env.local" | cut -d'=' -f2- | tr -d '"')
   echo "✅ DATABASE_URL loaded from .env.local"
 else
-  echo "❌ .env.local not found"
+  echo "❌ .env.local not found at $WEB_DIR/.env.local"
   exit 1
 fi
 
@@ -25,7 +30,7 @@ echo ""
 
 # Try to connect
 echo "🔌 Testing database connection..."
-cd ../.. && npx prisma db execute --schema=./prisma/schema.prisma --stdin <<< "SELECT 1;" 2>&1
+cd "$PROJECT_ROOT" && npx prisma db execute --schema=./prisma/schema.prisma --stdin <<< "SELECT 1;" 2>&1
 
 if [ $? -eq 0 ]; then
   echo ""
