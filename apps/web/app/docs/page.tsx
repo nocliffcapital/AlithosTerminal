@@ -330,7 +330,7 @@ export default function DocsPage() {
             {/* Getting Started */}
             <section 
               id="getting-started" 
-              ref={(el) => (sectionRefs.current['getting-started'] = el)}
+              ref={(el) => { sectionRefs.current['getting-started'] = el; }}
               className="mb-12 scroll-mt-24"
             >
               <h2 className="text-3xl font-bold mb-6 text-foreground">Getting Started</h2>
@@ -357,7 +357,7 @@ export default function DocsPage() {
             {/* Trading Interface */}
             <section 
               id="trading-interface" 
-              ref={(el) => (sectionRefs.current['trading-interface'] = el)}
+              ref={(el) => { sectionRefs.current['trading-interface'] = el; }}
               className="mb-12 scroll-mt-24"
             >
               <h2 className="text-3xl font-bold mb-6 text-foreground">Trading Interface</h2>
@@ -705,7 +705,7 @@ export default function DocsPage() {
             {/* Custom Workspace */}
             <section 
               id="custom-workspace" 
-              ref={(el) => (sectionRefs.current['custom-workspace'] = el)}
+              ref={(el) => { sectionRefs.current['custom-workspace'] = el; }}
               className="mb-12 scroll-mt-24"
             >
               <h2 className="text-3xl font-bold mb-6 text-foreground">Custom Workspace</h2>
@@ -1070,7 +1070,7 @@ export default function DocsPage() {
             {/* Keyboard Shortcuts */}
             <section 
               id="keyboard-shortcuts" 
-              ref={(el) => (sectionRefs.current['keyboard-shortcuts'] = el)}
+              ref={(el) => { sectionRefs.current['keyboard-shortcuts'] = el; }}
               className="mb-12 scroll-mt-24"
             >
           <h2 className="text-3xl font-bold mb-6 text-foreground">
@@ -1115,7 +1115,7 @@ export default function DocsPage() {
             {/* Command Palette */}
             <section 
               id="command-palette" 
-              ref={(el) => (sectionRefs.current['command-palette'] = el)}
+              ref={(el) => { sectionRefs.current['command-palette'] = el; }}
               className="mb-12 scroll-mt-24"
             >
           <h2 className="text-3xl font-bold mb-6 text-foreground">
@@ -1152,7 +1152,7 @@ export default function DocsPage() {
             {/* Web3 Features */}
             <section 
               id="web3-features" 
-              ref={(el) => (sectionRefs.current['web3-features'] = el)}
+              ref={(el) => { sectionRefs.current['web3-features'] = el; }}
               className="mb-12 scroll-mt-24"
             >
           <h2 className="text-3xl font-bold mb-6 text-foreground">
@@ -1204,7 +1204,7 @@ export default function DocsPage() {
             {/* Alerts & Automation */}
             <section 
               id="alerts-automation" 
-              ref={(el) => (sectionRefs.current['alerts-automation'] = el)}
+              ref={(el) => { sectionRefs.current['alerts-automation'] = el; }}
               className="mb-12 scroll-mt-24"
             >
           <h2 className="text-3xl font-bold mb-6 text-foreground">
@@ -1250,7 +1250,7 @@ export default function DocsPage() {
             {/* Settings */}
             <section 
               id="settings" 
-              ref={(el) => (sectionRefs.current['settings'] = el)}
+              ref={(el) => { sectionRefs.current['settings'] = el; }}
               className="mb-12 scroll-mt-24"
             >
           <h2 className="text-3xl font-bold mb-6 text-foreground">
