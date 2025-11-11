@@ -1,9 +1,16 @@
 [build]
-  # Base directory for the build
+  # Base directory for the build (root of monorepo)
   base = "."
   
-  # Build command - runs from root, generates Prisma Client, then builds Next.js app
-  # The build script in apps/web/package.json already includes prisma generate
+  # Install command - ensures workspace dependencies are installed
+  # Netlify will run this before the build command
+  # For monorepos, we need to install at root to set up workspaces
+  # Using npm ci for faster, reliable installs (falls back to npm install if needed)
+  install = "npm ci || npm install"
+  
+  # Build command for monorepo:
+  # 1. Prisma generate (creates Prisma Client)
+  # 2. Next.js build
   command = "cd apps/web && npm run build"
   
   # Publish directory (Next.js output)
